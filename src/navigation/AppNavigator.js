@@ -1,5 +1,5 @@
-import React, { lazy, Suspense } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +20,7 @@ import AddInvestmentScreen from '../screens/more/AddInvestmentScreen';
 import DebtsScreen from '../screens/more/DebtsScreen';
 import AddDebtScreen from '../screens/more/AddDebtScreen';
 import ProjectionsScreen from '../screens/more/ProjectionsScreen';
-const NotificationsScreen = lazy(() => import('../screens/more/NotificationsScreen'));
+import NotificationsScreen from '../screens/more/NotificationsScreen';
 import ExportScreen from '../screens/more/ExportScreen';
 import SettingsScreen from '../screens/more/SettingsScreen';
 import BudgetScreen from '../screens/budget/BudgetScreen';
@@ -96,16 +96,7 @@ function MoreStack() {
         title: route.params?.debt ? 'Editar Deuda' : 'Nueva Deuda',
       })} />
       <Stack.Screen name="Projections" component={ProjectionsScreen} options={{ title: 'Simulador' }} />
-      <Stack.Screen
-        name="Notifications"
-        options={{ title: 'Notificaciones' }}
-      >
-        {props => (
-          <Suspense fallback={<ActivityIndicator style={{ flex: 1 }} />}>
-            <NotificationsScreen {...props} />
-          </Suspense>
-        )}
-      </Stack.Screen>
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notificaciones' }} />
       <Stack.Screen name="Export" component={ExportScreen} options={{ title: 'Exportar Datos' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Configuración' }} />
       <Stack.Screen name="Budget" component={BudgetScreen} options={{ title: 'Presupuesto' }} />

@@ -29,11 +29,12 @@
       },
       "package": "com.financeapp.personal",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -56,8 +57,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "finance-app-local"
+        "projectId": "6d3d4b16-b2ec-42cb-9baf-913603f6a661"
       }
-    }
+    },
+    "owner": "ccristmedicals"
   }
 }
