@@ -350,3 +350,4 @@ Solo se aceptan archivos `.json` exportados por esta misma app.
 
 **Advertencia `expo-notifications` en terminal:**
 Es un warning de Expo Go SDK 53/54 por inicialización del módulo nativo. No afecta el funcionamiento. Está suprimido a nivel de `LogBox` y `console`.
+# FinanzasApp
