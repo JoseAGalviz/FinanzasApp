@@ -1,9 +1,11 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
+import { Platform } from 'react-native';
 import { getDb } from '../database/db';
 import { EXPENSE_CATEGORIES } from '../constants/categories';
 
 let notifModule = null;
 let handlerSet = false;
+let channelCreated = false;
 
 async function getNotif() {
   if (!notifModule) {
@@ -18,6 +20,17 @@ async function getNotif() {
       });
       handlerSet = true;
     }
+  }
+  if (Platform.OS === 'android' && !channelCreated) {
+    await notifModule.setNotificationChannelAsync('default', {
+      name: 'FinanzasApp',
+      importance: notifModule.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#10B981',
+      enableVibrate: true,
+      showBadge: false,
+    });
+    channelCreated = true;
   }
   return notifModule;
 }
@@ -34,8 +47,10 @@ async function getConfig() {
 async function hasPermission() {
   try {
     const Notifications = await getNotif();
-    const { status } = await Notifications.getPermissionsAsync();
-    return status === 'granted';
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    if (existing === 'granted') return true;
+    const { status: requested } = await Notifications.requestPermissionsAsync();
+    return requested === 'granted';
   } catch {
     return false;
   }
@@ -50,9 +65,11 @@ async function cancelByPrefix(prefix) {
         .filter(n => n.identifier.startsWith(prefix))
         .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier))
     );
-  } catch {
-    // local notifications may not be available
-  }
+  } catch { /* local notifications may not be available */ }
+}
+
+function getLastDayOfMonth(year, month) {
+  return new Date(year, month, 0).getDate();
 }
 
 export function useNotifications() {
@@ -66,15 +83,11 @@ export function useNotifications() {
     const m = String(month).padStart(2, '0');
     const y = String(year);
 
-    const budgets = await db.getAllAsync(
-      'SELECT * FROM budgets WHERE month=? AND year=?',
-      [month, year]
-    );
+    const budgets = await db.getAllAsync('SELECT * FROM budgets WHERE month=? AND year=?', [month, year]);
     if (!budgets.length) return;
 
     const spending = await db.getAllAsync(
-      `SELECT category, SUM(amount) as spent
-       FROM transactions
+      `SELECT category, SUM(amount) as spent FROM transactions
        WHERE type='expense' AND strftime('%m',date)=? AND strftime('%Y',date)=?
        GROUP BY category`,
       [m, y]
@@ -134,7 +147,7 @@ export function useNotifications() {
             body: `"${debt.name}" vence el ${debt.due_date}. Recuerda hacer tu pago.`,
             sound: true,
           },
-          trigger: { date: trigger },
+          trigger: { date: trigger, channelId: 'default' },
         }).catch(() => {});
       }
     }
@@ -182,7 +195,7 @@ export function useNotifications() {
         body: `Sin aportes esta semana: ${names}${extra}. ¡Mantén el ritmo!`,
         sound: true,
       },
-      trigger: { date: trigger },
+      trigger: { date: trigger, channelId: 'default' },
     }).catch(() => {});
   }, []);
 
@@ -215,6 +228,110 @@ export function useNotifications() {
     }
   }, []);
 
+  // Schedule notifications for bills: fires X days before due_day each month
+  const scheduleBillNotifications = useCallback(async () => {
+    if (!(await hasPermission())) return;
+
+    await cancelByPrefix('bill_');
+
+    const db = getDb();
+    const bills = await db.getAllAsync('SELECT * FROM bills WHERE is_active=1');
+    if (!bills.length) return;
+
+    const Notifications = await getNotif();
+    const now = new Date();
+
+    for (const bill of bills) {
+      const notifyBefore = bill.notify_days_before ?? 3;
+      const [notifyHour, notifyMin] = (bill.notify_time || '09:00').split(':').map(Number);
+
+      // Schedule for current month and next month
+      for (let monthOffset = 0; monthOffset <= 1; monthOffset++) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth() + 1;
+        const lastDay = getLastDayOfMonth(year, month);
+        const dueDayActual = bill.due_day === 0 ? lastDay : Math.min(bill.due_day, lastDay);
+
+        const notifyDay = dueDayActual - notifyBefore;
+        if (notifyDay < 1) continue;
+
+        const triggerDate = new Date(year, month - 1, notifyDay, notifyHour, notifyMin, 0);
+        if (triggerDate <= now) continue;
+
+        const dueDayLabel = bill.due_day === 0 ? 'el último día del mes' : `el día ${dueDayActual}`;
+        await Notifications.scheduleNotificationAsync({
+          identifier: `bill_${bill.id}_${year}_${month}`,
+          content: {
+            title: '📋 Pago próximo',
+            body: `"${bill.name}" vence ${dueDayLabel}. ${notifyBefore} día(s) para el vencimiento.`,
+            sound: true,
+          },
+          trigger: { date: triggerDate, channelId: 'default' },
+        }).catch(() => {});
+      }
+    }
+  }, []);
+
+  // Schedule recurring income reminders (day 15 and last day of month)
+  const scheduleRecurringIncomeReminders = useCallback(async () => {
+    if (!(await hasPermission())) return;
+    const cfg = await getConfig();
+    if (!cfg.recurring_income?.enabled) return;
+
+    await cancelByPrefix('recurring_income_');
+
+    const db = getDb();
+    const recurring = await db.getAllAsync(
+      "SELECT DISTINCT category, type, description, recurring_day FROM transactions WHERE is_recurring=1 AND recurring_day IS NOT NULL"
+    );
+    if (!recurring.length) return;
+
+    const configRow = await db.getFirstAsync("SELECT time FROM notifications_config WHERE type='recurring_income'");
+    const globalTime = configRow?.time || '09:00';
+
+    const Notifications = await getNotif();
+    const now = new Date();
+
+    for (const tmpl of recurring) {
+      const [notifyHour, notifyMin] = globalTime.split(':').map(Number);
+      for (let monthOffset = 0; monthOffset <= 1; monthOffset++) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth() + 1;
+        const lastDay = getLastDayOfMonth(year, month);
+        const day = tmpl.recurring_day === 0 ? lastDay : Math.min(tmpl.recurring_day, lastDay);
+
+        const triggerDate = new Date(year, month - 1, day, notifyHour, notifyMin, 0);
+        if (triggerDate <= now) continue;
+
+        const label = tmpl.type === 'income' ? 'ingreso' : 'gasto';
+        const name = tmpl.description || tmpl.category;
+        await Notifications.scheduleNotificationAsync({
+          identifier: `recurring_income_${tmpl.category}_${year}_${month}`,
+          content: {
+            title: `💰 ${tmpl.type === 'income' ? 'Día de cobro' : 'Pago recurrente'}`,
+            body: `Recuerda registrar tu ${label}: ${name}.`,
+            sound: true,
+          },
+          trigger: { date: triggerDate, channelId: 'default' },
+        }).catch(() => {});
+      }
+    }
+  }, []);
+
+  const sendTestNotification = useCallback(async (type, content) => {
+    if (!(await hasPermission())) {
+      return false;
+    }
+    const Notifications = await getNotif();
+    await Notifications.scheduleNotificationAsync({
+      content: { ...content, sound: true },
+      trigger: null,
+    });
+    return true;
+  }, []);
+
   const scheduleAllNotifications = useCallback(async (month, year) => {
     if (!(await hasPermission())) return;
     await Promise.all([
@@ -222,14 +339,19 @@ export function useNotifications() {
       scheduleDebtReminders(),
       scheduleGoalReminder(),
       checkEmergencyFundAlert(),
+      scheduleBillNotifications(),
+      scheduleRecurringIncomeReminders(),
     ]);
-  }, [checkBudgetAlerts, scheduleDebtReminders, scheduleGoalReminder, checkEmergencyFundAlert]);
+  }, [checkBudgetAlerts, scheduleDebtReminders, scheduleGoalReminder, checkEmergencyFundAlert, scheduleBillNotifications, scheduleRecurringIncomeReminders]);
 
   return {
     checkBudgetAlerts,
     scheduleDebtReminders,
     scheduleGoalReminder,
     checkEmergencyFundAlert,
+    scheduleBillNotifications,
+    scheduleRecurringIncomeReminders,
     scheduleAllNotifications,
+    sendTestNotification,
   };
 }

@@ -1,6 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, LogBox } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 LogBox.ignoreLogs([
   'expo-notifications: Android Push notifications',
@@ -21,7 +22,7 @@ console.warn = (...args) => {
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { initDatabase } from './src/database/db';
+import { initDatabase, processRecurringTransactions } from './src/database/db';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 
@@ -64,6 +65,7 @@ export default function App() {
     async function init() {
       try {
         await initDatabase();
+        await processRecurringTransactions();
         setIsDbReady(true);
       } catch (e) {
         console.error('Database initialization failed:', e);
@@ -90,11 +92,13 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppProvider>
-        <AppWithNav />
-      </AppProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppProvider>
+          <AppWithNav />
+        </AppProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

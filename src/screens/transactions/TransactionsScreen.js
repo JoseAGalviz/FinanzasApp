@@ -172,7 +172,7 @@ export default function TransactionsScreen({ navigation }) {
       {/* FAB */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('AddTransaction')}
+        onPress={() => navigation.push('AddTransaction')}
       >
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>

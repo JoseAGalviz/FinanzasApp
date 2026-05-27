@@ -8,9 +8,10 @@ const MENU_ITEMS = [
   {
     section: 'Finanzas',
     items: [
+      { key: 'Bills', title: 'Responsabilidades', subtitle: 'Pagos fijos y vencimientos', icon: 'receipt', color: '#EF4444' },
       { key: 'Budget', title: 'Presupuesto', subtitle: 'Límites por categoría', icon: 'wallet', color: '#3B82F6' },
       { key: 'Investments', title: 'Inversiones', subtitle: 'Portafolio y rendimientos', icon: 'trending-up', color: '#10B981' },
-      { key: 'Debts', title: 'Deudas', subtitle: 'Estrategias de pago', icon: 'card', color: '#EF4444' },
+      { key: 'Debts', title: 'Deudas', subtitle: 'Estrategias de pago', icon: 'card', color: '#F97316' },
       { key: 'Projections', title: 'Simulador', subtitle: 'Proyecciones y FIRE', icon: 'calculator', color: '#8B5CF6' },
     ],
   },

@@ -48,7 +48,7 @@ export async function exportFullBackupJSON() {
   const db = getDb();
 
   const [transactions, categories, budgets, savings_goals, savings_contributions,
-    debts, debt_payments, emergency_fund, investments, settings] = await Promise.all([
+    debts, debt_payments, emergency_fund, investments, settings, bills, bill_payments] = await Promise.all([
     db.getAllAsync('SELECT * FROM transactions'),
     db.getAllAsync('SELECT * FROM categories'),
     db.getAllAsync('SELECT * FROM budgets'),
@@ -59,14 +59,16 @@ export async function exportFullBackupJSON() {
     db.getAllAsync('SELECT * FROM emergency_fund'),
     db.getAllAsync('SELECT * FROM investments'),
     db.getAllAsync('SELECT * FROM settings'),
+    db.getAllAsync('SELECT * FROM bills'),
+    db.getAllAsync('SELECT * FROM bill_payments'),
   ]);
 
   const backup = {
-    version: '1.0',
+    version: '1.1',
     exportedAt: new Date().toISOString(),
     data: {
       transactions, categories, budgets, savings_goals, savings_contributions,
-      debts, debt_payments, emergency_fund, investments, settings,
+      debts, debt_payments, emergency_fund, investments, settings, bills, bill_payments,
     },
   };
 
@@ -97,8 +99,26 @@ export async function importBackupJSON(uri) {
 
     for (const row of (data.transactions || [])) {
       await db.runAsync(
-        'INSERT OR REPLACE INTO transactions (id, type, amount, category, description, date, is_recurring, receipt_uri, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-        [row.id, row.type, row.amount, row.category, row.description, row.date, row.is_recurring, row.receipt_uri, row.created_at]
+        'INSERT OR REPLACE INTO transactions (id, type, amount, category, description, date, is_recurring, recurring_day, receipt_uri, currency, rate_type, usd_equivalent, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [row.id, row.type, row.amount, row.category, row.description, row.date, row.is_recurring,
+         row.recurring_day ?? null, row.receipt_uri, row.currency || 'USD', row.rate_type || 'parallel',
+         row.usd_equivalent ?? null, row.created_at]
+      );
+    }
+
+    for (const row of (data.bills || [])) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO bills (id, name, amount, currency, due_day, category, notes, is_active, notify_days_before, notify_time, color, icon, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [row.id, row.name, row.amount, row.currency || 'USD', row.due_day, row.category || 'other',
+         row.notes, row.is_active ?? 1, row.notify_days_before ?? 3, row.notify_time || '09:00',
+         row.color || '#EF4444', row.icon || 'receipt', row.created_at]
+      );
+    }
+
+    for (const row of (data.bill_payments || [])) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO bill_payments (id, bill_id, amount, currency, date, notes, created_at) VALUES (?,?,?,?,?,?,?)',
+        [row.id, row.bill_id, row.amount, row.currency || 'USD', row.date, row.notes, row.created_at]
       );
     }
 

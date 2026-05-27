@@ -24,6 +24,8 @@ import NotificationsScreen from '../screens/more/NotificationsScreen';
 import ExportScreen from '../screens/more/ExportScreen';
 import SettingsScreen from '../screens/more/SettingsScreen';
 import BudgetScreen from '../screens/budget/BudgetScreen';
+import BillsScreen from '../screens/bills/BillsScreen';
+import AddBillScreen from '../screens/bills/AddBillScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -100,6 +102,10 @@ function MoreStack() {
       <Stack.Screen name="Export" component={ExportScreen} options={{ title: 'Exportar Datos' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Configuración' }} />
       <Stack.Screen name="Budget" component={BudgetScreen} options={{ title: 'Presupuesto' }} />
+      <Stack.Screen name="Bills" component={BillsScreen} options={{ title: 'Responsabilidades' }} />
+      <Stack.Screen name="AddBill" component={AddBillScreen} options={({ route }) => ({
+        title: route.params?.bill ? 'Editar Responsabilidad' : 'Nueva Responsabilidad',
+      })} />
     </Stack.Navigator>
   );
 }

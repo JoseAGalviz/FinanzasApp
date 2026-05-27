@@ -25,7 +25,7 @@ const TEST_CONTENT = {
 
 export default function NotificationsScreen() {
   const { colors } = useApp();
-  const { scheduleAllNotifications } = useNotifications();
+  const { scheduleAllNotifications, sendTestNotification } = useNotifications();
   const [config, setConfig] = useState({});
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -82,21 +82,16 @@ export default function NotificationsScreen() {
   }
 
   async function testNotification(type) {
-    if (!permissionGranted) {
-      Alert.alert('Permisos', 'Habilita las notificaciones primero.');
-      return;
-    }
     const content = TEST_CONTENT[type];
-    if (content) {
-      try {
-        const N = await import('expo-notifications');
-        await N.scheduleNotificationAsync({
-          content: { ...content, sound: true },
-          trigger: null,
-        });
-      } catch {
-        Alert.alert('Error', 'No se pudo enviar la notificación de prueba.');
+    if (!content) return;
+    try {
+      const sent = await sendTestNotification(type, content);
+      if (!sent) {
+        Alert.alert('Permisos', 'Habilita las notificaciones en Configuración del dispositivo.');
+        setPermissionGranted(false);
       }
+    } catch {
+      Alert.alert('Error', 'No se pudo enviar la notificación de prueba.');
     }
   }
 

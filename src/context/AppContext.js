@@ -35,7 +35,10 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const systemScheme = useColorScheme();
+  // exchangeRates: parallel/street rates (VES, COP)
   const [exchangeRates, setExchangeRates] = useState({ VES: { rate: 90 }, COP: { rate: 4200 } });
+  // bcvRate: official BCV rate for VES (used for indexed income)
+  const [bcvRate, setBcvRate] = useState({ rate: 90 });
   const [ratesUpdatedAt, setRatesUpdatedAt] = useState(null);
 
   useEffect(() => {
@@ -52,7 +55,11 @@ export function AppProvider({ children }) {
         const rateMap = {};
         let latest = null;
         for (const r of rateRows) {
-          rateMap[r.from_currency] = { rate: r.rate, updated_at: r.updated_at };
+          if (r.from_currency === 'VES_BCV') {
+            setBcvRate({ rate: r.rate, updated_at: r.updated_at });
+          } else {
+            rateMap[r.from_currency] = { rate: r.rate, updated_at: r.updated_at };
+          }
           if (!latest || r.updated_at > latest) latest = r.updated_at;
         }
         setExchangeRates(rateMap);
@@ -89,11 +96,25 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_MONTH', payload: { month: m, year: y } });
   }
 
+  // Convert any amount to USD using parallel/street rate (for expenses, general use)
   function convertToUSD(amount, currency) {
     if (!currency || currency === 'USD') return parseFloat(amount) || 0;
     const entry = exchangeRates[currency];
     if (!entry || !entry.rate) return null;
     return (parseFloat(amount) || 0) / entry.rate;
+  }
+
+  // Convert VES amount to USD using BCV official rate (for indexed income)
+  function convertVESBCVtoUSD(amount) {
+    if (!bcvRate || !bcvRate.rate) return null;
+    return (parseFloat(amount) || 0) / bcvRate.rate;
+  }
+
+  // Generic convert with rate type selection
+  function convertToUSDWithRateType(amount, currency, rateType = 'parallel') {
+    if (!currency || currency === 'USD') return parseFloat(amount) || 0;
+    if (currency === 'VES' && rateType === 'bcv') return convertVESBCVtoUSD(amount);
+    return convertToUSD(amount, currency);
   }
 
   async function updateExchangeRate(fromCurrency, rate) {
@@ -106,7 +127,11 @@ export function AppProvider({ children }) {
     const rateMap = {};
     let latest = null;
     for (const r of rateRows) {
-      rateMap[r.from_currency] = { rate: r.rate, updated_at: r.updated_at };
+      if (r.from_currency === 'VES_BCV') {
+        setBcvRate({ rate: r.rate, updated_at: r.updated_at });
+      } else {
+        rateMap[r.from_currency] = { rate: r.rate, updated_at: r.updated_at };
+      }
       if (!latest || r.updated_at > latest) latest = r.updated_at;
     }
     setExchangeRates(rateMap);
@@ -119,8 +144,11 @@ export function AppProvider({ children }) {
     colors,
     currencyCode,
     exchangeRates,
+    bcvRate,
     ratesUpdatedAt,
     convertToUSD,
+    convertVESBCVtoUSD,
+    convertToUSDWithRateType,
     updateExchangeRate,
     updateTheme,
     updateCurrency,

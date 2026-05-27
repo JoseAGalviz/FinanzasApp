@@ -7,8 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../../context/AppContext';
 import { useTransactions } from '../../hooks/useTransactions';
+import { useNotifications } from '../../hooks/useNotifications';
+import { getDb } from '../../database/db';
 import { Input, AmountInput } from '../../components/Input';
 import { DatePicker } from '../../components/DatePicker';
+import { TimePicker } from '../../components/TimePicker';
 import { Button } from '../../components/Button';
 import { ConfirmModal } from '../../components/Modal';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../constants/categories';
@@ -17,8 +20,9 @@ import { BorderRadius, FontSize, FontWeight, Spacing, CURRENCY_SYMBOLS } from '.
 
 export default function AddTransactionScreen({ route, navigation }) {
   const existing = route.params?.transaction;
-  const { colors, currencyCode, convertToUSD } = useApp();
+  const { colors, currencyCode, convertToUSDWithRateType } = useApp();
   const { addTransaction, updateTransaction, deleteTransaction } = useTransactions();
+  const { scheduleRecurringIncomeReminders } = useNotifications();
 
   const [type, setType] = useState(existing?.type || 'expense');
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
@@ -26,8 +30,10 @@ export default function AddTransactionScreen({ route, navigation }) {
   const [description, setDescription] = useState(existing?.description || '');
   const [date, setDate] = useState(existing?.date || todayISO());
   const [isRecurring, setIsRecurring] = useState(existing?.is_recurring === 1 || false);
+  const [recurringNotifyTime, setRecurringNotifyTime] = useState(existing?.recurring_notify_time || '09:00');
   const [receiptUri, setReceiptUri] = useState(existing?.receipt_uri || null);
   const [currency, setCurrency] = useState(existing?.currency || currencyCode || 'USD');
+  const [rateType, setRateType] = useState(existing?.rate_type || 'parallel');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [showDelete, setShowDelete] = useState(false);
@@ -51,12 +57,30 @@ export default function AddTransactionScreen({ route, navigation }) {
     if (!validate()) return;
     setLoading(true);
     try {
-      const usd_equivalent = convertToUSD(parseFloat(amount), currency);
-      const data = { type, amount: parseFloat(amount), category, description, date, is_recurring: isRecurring, receipt_uri: receiptUri, currency, usd_equivalent };
+      const effectiveRateType = currency === 'VES' ? rateType : 'parallel';
+      const usd_equivalent = convertToUSDWithRateType(parseFloat(amount), currency, effectiveRateType);
+      const data = {
+        type, amount: parseFloat(amount), category, description, date,
+        is_recurring: isRecurring,
+        recurring_day: isRecurring ? (parseInt(date.split('-')[2], 10)) : null,
+        recurring_notify_time: isRecurring ? recurringNotifyTime : null,
+        receipt_uri: receiptUri, currency,
+        rate_type: effectiveRateType,
+        usd_equivalent,
+      };
       if (existing) {
         await updateTransaction(existing.id, data);
       } else {
         await addTransaction(data);
+      }
+      if (isRecurring) {
+        // Save preferred notification time in notifications_config
+        const db = getDb();
+        await db.runAsync(
+          "UPDATE notifications_config SET time=? WHERE type='recurring_income'",
+          [recurringNotifyTime]
+        ).catch(() => {});
+        scheduleRecurringIncomeReminders().catch(() => {});
       }
       navigation.goBack();
     } catch (e) {
@@ -185,6 +209,27 @@ export default function AddTransactionScreen({ route, navigation }) {
         />
         {errors.date && <Text style={[styles.error, { color: colors.danger }]}>{errors.date}</Text>}
 
+        {/* VES rate type selector */}
+        {currency === 'VES' && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Tasa a usar</Text>
+            <View style={[styles.typeToggle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.typeBtn, rateType === 'parallel' && { backgroundColor: colors.warning }]}
+                onPress={() => setRateType('parallel')}
+              >
+                <Text style={[styles.typeBtnText, { color: rateType === 'parallel' ? '#fff' : colors.textSecondary }]}>Paralelo/Calle</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeBtn, rateType === 'bcv' && { backgroundColor: colors.info }]}
+                onPress={() => setRateType('bcv')}
+              >
+                <Text style={[styles.typeBtnText, { color: rateType === 'bcv' ? '#fff' : colors.textSecondary }]}>BCV Oficial</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
         {/* Recurring toggle */}
         <View style={[styles.rowField, { borderColor: colors.border }]}>
           <View>
@@ -198,6 +243,23 @@ export default function AddTransactionScreen({ route, navigation }) {
             thumbColor="#fff"
           />
         </View>
+
+        {/* Recurring day info + time picker */}
+        {isRecurring && (
+          <>
+            <View style={[styles.recurringInfo, { backgroundColor: colors.primaryLight, borderColor: colors.primary + '40' }]}>
+              <Ionicons name="repeat" size={16} color={colors.primary} />
+              <Text style={[styles.recurringInfoText, { color: colors.primary }]}>
+                Se repetirá cada mes el día {parseInt(date.split('-')[2], 10)}
+              </Text>
+            </View>
+            <TimePicker
+              label="Hora del recordatorio"
+              value={recurringNotifyTime}
+              onChange={setRecurringNotifyTime}
+            />
+          </>
+        )}
 
         {/* Receipt (only for expenses) */}
         {type === 'expense' && (
@@ -322,6 +384,16 @@ const styles = StyleSheet.create({
   saveBtn: { marginTop: Spacing.md },
   deleteBtn: { marginTop: Spacing.sm },
   error: { fontSize: FontSize.xs, marginTop: -Spacing.sm, marginBottom: Spacing.sm },
+  recurringInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  recurringInfoText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
   currencyRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
   currencyChip: {
     flex: 1,

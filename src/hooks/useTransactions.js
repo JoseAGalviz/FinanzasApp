@@ -43,8 +43,10 @@ export function useTransactions() {
   const addTransaction = useCallback(async (data) => {
     const db = getDb();
     const result = await db.runAsync(
-      'INSERT INTO transactions (type, amount, category, description, date, is_recurring, receipt_uri, currency, usd_equivalent) VALUES (?,?,?,?,?,?,?,?,?)',
-      [data.type, parseFloat(data.amount), data.category, data.description || null, data.date, data.is_recurring ? 1 : 0, data.receipt_uri || null, data.currency || 'USD', data.usd_equivalent ?? null]
+      'INSERT INTO transactions (type, amount, category, description, date, is_recurring, recurring_day, receipt_uri, currency, rate_type, usd_equivalent) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [data.type, parseFloat(data.amount), data.category, data.description || null, data.date,
+       data.is_recurring ? 1 : 0, data.recurring_day ?? null,
+       data.receipt_uri || null, data.currency || 'USD', data.rate_type || 'parallel', data.usd_equivalent ?? null]
     );
     return result.lastInsertRowId;
   }, []);
@@ -52,8 +54,10 @@ export function useTransactions() {
   const updateTransaction = useCallback(async (id, data) => {
     const db = getDb();
     await db.runAsync(
-      'UPDATE transactions SET type=?, amount=?, category=?, description=?, date=?, is_recurring=?, receipt_uri=?, currency=?, usd_equivalent=? WHERE id=?',
-      [data.type, parseFloat(data.amount), data.category, data.description || null, data.date, data.is_recurring ? 1 : 0, data.receipt_uri || null, data.currency || 'USD', data.usd_equivalent ?? null, id]
+      'UPDATE transactions SET type=?, amount=?, category=?, description=?, date=?, is_recurring=?, recurring_day=?, receipt_uri=?, currency=?, rate_type=?, usd_equivalent=? WHERE id=?',
+      [data.type, parseFloat(data.amount), data.category, data.description || null, data.date,
+       data.is_recurring ? 1 : 0, data.recurring_day ?? null,
+       data.receipt_uri || null, data.currency || 'USD', data.rate_type || 'parallel', data.usd_equivalent ?? null, id]
     );
   }, []);
 

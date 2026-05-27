@@ -24,27 +24,31 @@ function daysAgo(dateStr) {
 }
 
 export default function SettingsScreen() {
-  const { colors, theme, currencySymbol, updateTheme, updateCurrency, exchangeRates, ratesUpdatedAt, updateExchangeRate } = useApp();
+  const { colors, theme, currencySymbol, updateTheme, updateCurrency, exchangeRates, bcvRate, ratesUpdatedAt, updateExchangeRate } = useApp();
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [vesRate, setVesRate] = useState('');
+  const [vesBcvRate, setVesBcvRate] = useState('');
   const [copRate, setCopRate] = useState('');
   const [savingRates, setSavingRates] = useState(false);
 
   useEffect(() => {
     setVesRate(String(exchangeRates.VES?.rate ?? 90));
     setCopRate(String(exchangeRates.COP?.rate ?? 4200));
-  }, [exchangeRates]);
+    setVesBcvRate(String(bcvRate?.rate ?? 90));
+  }, [exchangeRates, bcvRate]);
 
   async function handleSaveRates() {
     const ves = parseFloat(vesRate);
+    const vesBcv = parseFloat(vesBcvRate);
     const cop = parseFloat(copRate);
-    if (!ves || ves <= 0 || !cop || cop <= 0) {
+    if (!ves || ves <= 0 || !vesBcv || vesBcv <= 0 || !cop || cop <= 0) {
       Alert.alert('Error', 'Ingresa tasas válidas mayores a 0');
       return;
     }
     setSavingRates(true);
     try {
       await updateExchangeRate('VES', ves);
+      await updateExchangeRate('VES_BCV', vesBcv);
       await updateExchangeRate('COP', cop);
       Alert.alert('Listo', 'Tasas actualizadas. Se usarán en las próximas transacciones.');
     } finally {
@@ -123,18 +127,25 @@ export default function SettingsScreen() {
         </Text>
         <View style={styles.rateRow}>
           <View style={styles.rateField}>
-            <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>VES por 1 USD</Text>
+            <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>VES paralelo por 1 USD</Text>
             <Input value={vesRate} onChangeText={setVesRate} keyboardType="numeric" placeholder="Ej: 90" />
           </View>
+          <View style={styles.rateField}>
+            <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>VES BCV por 1 USD</Text>
+            <Input value={vesBcvRate} onChangeText={setVesBcvRate} keyboardType="numeric" placeholder="Ej: 85" />
+          </View>
+        </View>
+        <View style={styles.rateRow}>
           <View style={styles.rateField}>
             <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>COP por 1 USD</Text>
             <Input value={copRate} onChangeText={setCopRate} keyboardType="numeric" placeholder="Ej: 4200" />
           </View>
+          <View style={styles.rateField} />
         </View>
-        {vesRate && copRate && parseFloat(vesRate) > 0 && parseFloat(copRate) > 0 && (
+        {vesRate && parseFloat(vesRate) > 0 && vesBcvRate && parseFloat(vesBcvRate) > 0 && (
           <View style={[styles.ratePreview, { backgroundColor: colors.primaryLight }]}>
             <Text style={[styles.ratePreviewText, { color: colors.primary }]}>
-              1 COP = {(parseFloat(vesRate) / parseFloat(copRate)).toFixed(4)} VES
+              Diferencial VES: {((parseFloat(vesRate) / parseFloat(vesBcvRate) - 1) * 100).toFixed(1)}% sobre BCV
             </Text>
           </View>
         )}

@@ -13,7 +13,6 @@ import { Card } from '../../components/Card';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { AmountInput } from '../../components/Input';
-import { ProgressBarLabeled } from '../../components/ProgressBar';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
 
 export default function BudgetScreen() {

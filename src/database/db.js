@@ -27,6 +27,8 @@ export async function clearAllData() {
       DELETE FROM emergency_fund;
       DELETE FROM investments;
       DELETE FROM budgets;
+      DELETE FROM bills;
+      DELETE FROM bill_payments;
     `);
   });
 }
@@ -41,8 +43,12 @@ async function createTables() {
       description TEXT,
       date TEXT NOT NULL,
       is_recurring INTEGER DEFAULT 0,
+      recurring_day INTEGER DEFAULT NULL,
+      recurring_notify_time TEXT DEFAULT '09:00',
       receipt_uri TEXT,
       currency TEXT DEFAULT 'USD',
+      rate_type TEXT DEFAULT 'parallel',
+      usd_equivalent REAL DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -154,6 +160,33 @@ async function createTables() {
       version INTEGER NOT NULL UNIQUE,
       applied_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS bills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT DEFAULT 'USD',
+      due_day INTEGER NOT NULL,
+      category TEXT DEFAULT 'other',
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      notify_days_before INTEGER DEFAULT 3,
+      notify_time TEXT DEFAULT '09:00',
+      color TEXT DEFAULT '#EF4444',
+      icon TEXT DEFAULT 'receipt',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS bill_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT DEFAULT 'USD',
+      date TEXT NOT NULL,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(bill_id) REFERENCES bills(id) ON DELETE CASCADE
+    );
   `);
 }
 
@@ -165,7 +198,9 @@ async function runMigrations() {
     await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (1)");
   }
   if (version < 2) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'USD'");
+    try {
+      await db.execAsync("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'USD'");
+    } catch (_) {}
     await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (2)");
   }
   if (version < 3) {
@@ -175,6 +210,46 @@ async function runMigrations() {
     await db.execAsync("UPDATE transactions SET usd_equivalent = amount WHERE currency = 'USD' OR currency IS NULL");
     await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (3)");
   }
+  if (version < 4) {
+    try { await db.execAsync("ALTER TABLE transactions ADD COLUMN recurring_day INTEGER DEFAULT NULL"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE transactions ADD COLUMN rate_type TEXT DEFAULT 'parallel'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE transactions ADD COLUMN recurring_notify_time TEXT DEFAULT '09:00'"); } catch (_) {}
+    try {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS bills (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          amount REAL NOT NULL,
+          currency TEXT DEFAULT 'USD',
+          due_day INTEGER NOT NULL,
+          category TEXT DEFAULT 'other',
+          notes TEXT,
+          is_active INTEGER DEFAULT 1,
+          notify_days_before INTEGER DEFAULT 3,
+          notify_time TEXT DEFAULT '09:00',
+          color TEXT DEFAULT '#EF4444',
+          icon TEXT DEFAULT 'receipt',
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS bill_payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          currency TEXT DEFAULT 'USD',
+          date TEXT NOT NULL,
+          notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY(bill_id) REFERENCES bills(id) ON DELETE CASCADE
+        );
+      `);
+    } catch (_) {}
+    await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (4)");
+  }
+  if (version < 5) {
+    try { await db.execAsync("ALTER TABLE bills ADD COLUMN notify_time TEXT DEFAULT '09:00'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE transactions ADD COLUMN recurring_notify_time TEXT DEFAULT '09:00'"); } catch (_) {}
+    await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (5)");
+  }
 }
 
 async function seedDefaults() {
@@ -183,6 +258,7 @@ async function seedDefaults() {
     ['goal_reminder', 1, '10:00', 0],
     ['debt_reminder', 1, '08:00', 3],
     ['emergency_fund_alert', 1, '09:00', 0],
+    ['recurring_income', 1, '09:00', 0],
   ];
   for (const [type, enabled, time, days] of notifs) {
     await db.runAsync(
@@ -195,4 +271,49 @@ async function seedDefaults() {
   await db.runAsync("INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'system')");
   await db.runAsync("INSERT OR IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('VES', 'USD', 90)");
   await db.runAsync("INSERT OR IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('COP', 'USD', 4200)");
+  await db.runAsync("INSERT OR IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('VES_BCV', 'USD', 90)");
+}
+
+export async function processRecurringTransactions() {
+  const now = new Date();
+  const todayDay = now.getDate();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = String(now.getFullYear());
+
+  const recurring = await db.getAllAsync(
+    "SELECT DISTINCT category, type, currency, rate_type, recurring_day, description FROM transactions WHERE is_recurring=1 AND recurring_day IS NOT NULL"
+  );
+
+  for (const tmpl of recurring) {
+    const targetDay = tmpl.recurring_day === 0 ? getLastDayOfMonth(now) : tmpl.recurring_day;
+    if (todayDay < targetDay) continue;
+
+    const dateStr = buildDateStr(now.getFullYear(), now.getMonth() + 1, targetDay);
+    const exists = await db.getFirstAsync(
+      "SELECT id FROM transactions WHERE is_recurring=1 AND category=? AND type=? AND recurring_day=? AND strftime('%m',date)=? AND strftime('%Y',date)=?",
+      [tmpl.category, tmpl.type, tmpl.recurring_day, month, year]
+    );
+    if (!exists) {
+      const last = await db.getFirstAsync(
+        "SELECT * FROM transactions WHERE is_recurring=1 AND category=? AND type=? ORDER BY date DESC LIMIT 1",
+        [tmpl.category, tmpl.type]
+      );
+      if (last) {
+        await db.runAsync(
+          'INSERT INTO transactions (type, amount, category, description, date, is_recurring, recurring_day, currency, rate_type, usd_equivalent) VALUES (?,?,?,?,?,1,?,?,?,?)',
+          [last.type, last.amount, last.category, last.description, dateStr, tmpl.recurring_day, last.currency, last.rate_type || 'parallel', last.usd_equivalent]
+        );
+      }
+    }
+  }
+}
+
+function getLastDayOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function buildDateStr(year, month, day) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const d = Math.min(day, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
