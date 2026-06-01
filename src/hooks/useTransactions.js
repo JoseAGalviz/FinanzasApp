@@ -158,10 +158,50 @@ export function useTransactions() {
     return { income: inc, expense: exp, balance: inc - exp };
   }, []);
 
+  const getMonthlyTotalsUSD = useCallback(async (months = 6) => {
+    const db = getDb();
+    const results = [];
+    const now = new Date();
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const y = String(d.getFullYear());
+      const [inc, exp] = await Promise.all([
+        db.getFirstAsync(
+          `SELECT COALESCE(SUM(usd_equivalent),0) as t FROM transactions WHERE type='income' AND usd_equivalent IS NOT NULL AND strftime('%m',date)=? AND strftime('%Y',date)=?`,
+          [m, y]
+        ),
+        db.getFirstAsync(
+          `SELECT COALESCE(SUM(usd_equivalent),0) as t FROM transactions WHERE type='expense' AND usd_equivalent IS NOT NULL AND strftime('%m',date)=? AND strftime('%Y',date)=?`,
+          [m, y]
+        ),
+      ]);
+      results.push({ month: d.getMonth() + 1, year: d.getFullYear(), income: inc?.t || 0, expense: exp?.t || 0 });
+    }
+    return results;
+  }, []);
+
+  const getAverageIncomeUSD = useCallback(async (lastNMonths = 3) => {
+    const db = getDb();
+    const now = new Date();
+    let total = 0;
+    for (let i = 0; i < lastNMonths; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const y = String(d.getFullYear());
+      const row = await db.getFirstAsync(
+        `SELECT COALESCE(SUM(usd_equivalent),0) as t FROM transactions WHERE type='income' AND usd_equivalent IS NOT NULL AND strftime('%m',date)=? AND strftime('%Y',date)=?`,
+        [m, y]
+      );
+      total += row?.t || 0;
+    }
+    return total / lastNMonths;
+  }, []);
+
   return {
     transactions, loading, error,
     fetchTransactions, addTransaction, updateTransaction, deleteTransaction,
     getMonthSummary, getCategoryBreakdown, getMonthlyTotals, getAverageIncome,
-    getMonthSummaryUSD,
+    getMonthSummaryUSD, getMonthlyTotalsUSD, getAverageIncomeUSD,
   };
 }

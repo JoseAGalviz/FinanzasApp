@@ -139,7 +139,6 @@ export default function HomeScreen({ navigation }) {
   const billsHook = useBills();
   const { scheduleAllNotifications } = useNotifications();
 
-  const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [usdSummary, setUsdSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [recentTx, setRecentTx] = useState([]);
   const [goals, setGoals] = useState([]);
@@ -156,12 +155,10 @@ export default function HomeScreen({ navigation }) {
       const prev = prevMonth(selectedMonth, selectedYear);
 
       // Critical queries — must succeed for core UI
-      const [sum, usdSum, recent] = await Promise.all([
-        txHook.getMonthSummary(selectedMonth, selectedYear, currencyCode),
+      const [usdSum, recent] = await Promise.all([
         txHook.getMonthSummaryUSD(selectedMonth, selectedYear),
         txHook.fetchTransactions({ month: selectedMonth, year: selectedYear, limit: 5 }),
       ]);
-      setSummary(sum);
       setUsdSummary(usdSum);
       setRecentTx(recent);
 
@@ -172,11 +169,11 @@ export default function HomeScreen({ navigation }) {
           budgetHook.getTotalBudgetSummary(selectedMonth, selectedYear, currencyCode),
           savingsHook.getTotalSaved(),
           debtHook.getTotalDebt(),
-          txHook.getAverageIncome(3, currencyCode),
-          txHook.getMonthSummary(prev.month, prev.year, currencyCode),
+          txHook.getAverageIncomeUSD(3),
+          txHook.getMonthSummaryUSD(prev.month, prev.year),
           billsHook.getUpcomingBills(5),
           getDb()?.getFirstAsync('SELECT * FROM emergency_fund LIMIT 1') ?? Promise.resolve(null),
-          txHook.getMonthlyTotals(6, currencyCode),
+          txHook.getMonthlyTotalsUSD(6),
         ]);
 
       const gs = gsRes.status === 'fulfilled' ? gsRes.value : [];
@@ -192,13 +189,13 @@ export default function HomeScreen({ navigation }) {
       scheduleAllNotifications(selectedMonth, selectedYear).catch(() => {});
       setGoals(gs.slice(0, 3));
       setBudgetSummary(bs);
-      setNetWorth(sum.balance + totalSaved - totalDebt);
+      setNetWorth(usdSum.balance + totalSaved - totalDebt);
       setAvgIncome(avg);
       setUpcomingBills(upcoming);
       setMonthlyTotals(monthly);
 
       const budgetProgress = bs.budgeted > 0 ? bs.spent / bs.budgeted : 0;
-      const tips = generateAdvice(sum.income, sum.expense, prevSum.expense, gs, budgetProgress, upcoming, emergencyFund);
+      const tips = generateAdvice(usdSum.income, usdSum.expense, prevSum.expense, gs, budgetProgress, upcoming, emergencyFund);
       setAdvice(tips);
     } catch (e) {
       console.error('HomeScreen loadData error:', e);
@@ -223,8 +220,8 @@ export default function HomeScreen({ navigation }) {
     setSelectedMonth(month, year);
   }
 
-  const savings = summary.income - summary.expense;
-  const savingsRate = summary.income > 0 ? (savings / summary.income) * 100 : 0;
+  const savings = usdSummary.income - usdSummary.expense;
+  const savingsRate = usdSummary.income > 0 ? (savings / usdSummary.income) * 100 : 0;
   const budgetProgress = budgetSummary.budgeted > 0 ? budgetSummary.spent / budgetSummary.budgeted : 0;
 
   return (
@@ -236,10 +233,10 @@ export default function HomeScreen({ navigation }) {
         <View>
           <Text style={[styles.greeting, { color: colors.textSecondary }]}>Patrimonio neto</Text>
           <Text style={[styles.netWorth, { color: netWorth >= 0 ? colors.primary : colors.danger }]}>
-            {formatCurrency(netWorth, currencySymbol)}
+            {formatCurrency(netWorth, '$')}
           </Text>
           <Text style={[styles.avgIncome, { color: colors.textTertiary }]}>
-            Ingreso prom. 3m: {formatCurrency(avgIncome, currencySymbol)}
+            Ingreso prom. 3m: {formatCurrency(avgIncome, '$')}
           </Text>
         </View>
         <TouchableOpacity
@@ -270,10 +267,10 @@ export default function HomeScreen({ navigation }) {
 
         {/* Summary Cards */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsScroll} contentContainerStyle={styles.cardsRow}>
-          <SummaryCard title="Balance" value={summary.balance} color={summary.balance >= 0 ? colors.primary : colors.danger} icon="trending-up" currencySymbol={currencySymbol} colors={colors} />
-          <SummaryCard title="Ingresos" value={summary.income} color={colors.primary} icon="arrow-down-circle" currencySymbol={currencySymbol} colors={colors} />
-          <SummaryCard title="Gastos" value={summary.expense} color={colors.danger} icon="arrow-up-circle" currencySymbol={currencySymbol} colors={colors} />
-          <SummaryCard title="Tasa Ahorro" value={savingsRate} isPercent icon="wallet" color={colors.info} currencySymbol={currencySymbol} colors={colors} />
+          <SummaryCard title="Balance" value={usdSummary.balance} color={usdSummary.balance >= 0 ? colors.primary : colors.danger} icon="trending-up" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Ingresos" value={usdSummary.income} color={colors.primary} icon="arrow-down-circle" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Gastos" value={usdSummary.expense} color={colors.danger} icon="arrow-up-circle" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Tasa Ahorro" value={savingsRate} isPercent icon="wallet" color={colors.info} currencySymbol="$" colors={colors} />
         </ScrollView>
 
         {/* Monthly Evolution */}
@@ -316,33 +313,6 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* USD Equivalent */}
-        {(usdSummary.income > 0 || usdSummary.expense > 0) && (
-          <View style={[styles.usdCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.usdHeader}>
-              <Ionicons name="swap-horizontal" size={14} color={colors.textTertiary} />
-              <Text style={[styles.usdLabel, { color: colors.textTertiary }]}>Equivalente USD (todas las monedas)</Text>
-            </View>
-            <View style={styles.usdRow}>
-              <View style={styles.usdItem}>
-                <Text style={[styles.usdItemLabel, { color: colors.textSecondary }]}>Ingresos</Text>
-                <Text style={[styles.usdItemValue, { color: colors.primary }]}>{formatCurrency(usdSummary.income, '$')}</Text>
-              </View>
-              <View style={[styles.usdDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.usdItem}>
-                <Text style={[styles.usdItemLabel, { color: colors.textSecondary }]}>Gastos</Text>
-                <Text style={[styles.usdItemValue, { color: colors.danger }]}>{formatCurrency(usdSummary.expense, '$')}</Text>
-              </View>
-              <View style={[styles.usdDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.usdItem}>
-                <Text style={[styles.usdItemLabel, { color: colors.textSecondary }]}>Balance</Text>
-                <Text style={[styles.usdItemValue, { color: usdSummary.balance >= 0 ? colors.primary : colors.danger }]}>
-                  {formatCurrency(usdSummary.balance, '$')}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
 
         {/* Budget Progress */}
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
