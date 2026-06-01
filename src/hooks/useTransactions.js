@@ -181,6 +181,22 @@ export function useTransactions() {
     return results;
   }, []);
 
+  const getBalanceByCurrency = useCallback(async (month, year) => {
+    const db = getDb();
+    const m = String(month).padStart(2, '0');
+    const y = String(year);
+    return await db.getAllAsync(
+      `SELECT currency,
+         COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END), 0) as income,
+         COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) as expense
+       FROM transactions
+       WHERE strftime('%m',date)=? AND strftime('%Y',date)=?
+       GROUP BY currency
+       ORDER BY currency`,
+      [m, y]
+    );
+  }, []);
+
   const getAverageIncomeUSD = useCallback(async (lastNMonths = 3) => {
     const db = getDb();
     const now = new Date();
@@ -202,6 +218,6 @@ export function useTransactions() {
     transactions, loading, error,
     fetchTransactions, addTransaction, updateTransaction, deleteTransaction,
     getMonthSummary, getCategoryBreakdown, getMonthlyTotals, getAverageIncome,
-    getMonthSummaryUSD, getMonthlyTotalsUSD, getAverageIncomeUSD,
+    getMonthSummaryUSD, getMonthlyTotalsUSD, getAverageIncomeUSD, getBalanceByCurrency,
   };
 }

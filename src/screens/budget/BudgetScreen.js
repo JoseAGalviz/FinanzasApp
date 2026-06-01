@@ -13,7 +13,8 @@ import { Card } from '../../components/Card';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { AmountInput } from '../../components/Input';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, getCurrencySymbol } from '../../constants/theme';
+import { CurrencyPicker } from '../../components/CurrencyPicker';
 
 export default function BudgetScreen() {
   const { colors, currencySymbol, currencyCode, selectedMonth, selectedYear } = useApp();
@@ -24,13 +25,14 @@ export default function BudgetScreen() {
   const [showAddBudget, setShowAddBudget] = useState(false);
   const [selectedCat, setSelectedCat] = useState(null);
   const [limitAmount, setLimitAmount] = useState('');
+  const [budgetCurrency, setBudgetCurrency] = useState(currencyCode || 'USD');
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [avgIncome, setAvgIncome] = useState(0);
 
   const loadData = useCallback(async () => {
     const [bs, ts, avg] = await Promise.all([
-      fetchBudgets(selectedMonth, selectedYear, currencyCode),
+      fetchBudgets(selectedMonth, selectedYear),
       getTotalBudgetSummary(selectedMonth, selectedYear, currencyCode),
       getAverageIncome(3, currencyCode),
     ]);
@@ -50,6 +52,7 @@ export default function BudgetScreen() {
     const existing = budgets.find(b => b.category_id === cat.id);
     setSelectedCat(cat);
     setLimitAmount(existing ? String(existing.limit_amount) : '');
+    setBudgetCurrency(existing?.currency || currencyCode || 'USD');
     setShowAddBudget(true);
   }
 
@@ -60,7 +63,7 @@ export default function BudgetScreen() {
     }
     setSaving(true);
     try {
-      await setBudgetLimit(selectedCat.id, selectedMonth, selectedYear, limitAmount);
+      await setBudgetLimit(selectedCat.id, selectedMonth, selectedYear, limitAmount, budgetCurrency);
       setShowAddBudget(false);
       loadData();
     } finally {
@@ -76,7 +79,7 @@ export default function BudgetScreen() {
       [
         { text: 'Cancelar' },
         { text: 'Aplicar', onPress: async () => {
-          await applyRule502030(avgIncome, selectedMonth, selectedYear);
+          await applyRule502030(avgIncome, selectedMonth, selectedYear, currencyCode);
           loadData();
         }},
       ]
@@ -153,6 +156,7 @@ export default function BudgetScreen() {
           const budget = budgets.find(b => b.category_id === cat.id);
           const spent = budget?.spent || 0;
           const limit = budget?.limit_amount || 0;
+          const budSym = getCurrencySymbol(budget?.currency || currencyCode);
 
           return (
             <TouchableOpacity
@@ -167,7 +171,7 @@ export default function BudgetScreen() {
                 <View style={styles.catHeader}>
                   <Text style={[styles.catName, { color: colors.text }]}>{cat.name}</Text>
                   <Text style={[styles.catAmt, { color: limit > 0 ? colors.textSecondary : colors.textTertiary }]}>
-                    {limit > 0 ? `${formatCurrency(spent, currencySymbol)} / ${formatCurrency(limit, currencySymbol)}` : 'Sin límite'}
+                    {limit > 0 ? `${formatCurrency(spent, budSym)} / ${formatCurrency(limit, budSym)}` : 'Sin límite'}
                   </Text>
                 </View>
                 {limit > 0 && (
@@ -186,6 +190,7 @@ export default function BudgetScreen() {
       </ScrollView>
 
       <Modal visible={showAddBudget} onClose={() => setShowAddBudget(false)} title={selectedCat ? `Presupuesto: ${selectedCat.name}` : 'Presupuesto'}>
+        <CurrencyPicker label="Moneda" value={budgetCurrency} onChange={setBudgetCurrency} colors={colors} />
         <AmountInput label="Límite mensual" value={limitAmount} onChangeText={setLimitAmount} />
         <Button title="Guardar" onPress={handleSaveBudget} loading={saving} style={{ marginBottom: Spacing.sm }} />
         {budgets.find(b => b.category_id === selectedCat?.id) && (

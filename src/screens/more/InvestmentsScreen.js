@@ -11,7 +11,7 @@ import { INVESTMENT_TYPES } from '../../constants/categories';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmModal } from '../../components/Modal';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, getCurrencySymbol } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -123,6 +123,7 @@ export default function InvestmentsScreen({ navigation }) {
           />
         ) : (
           investments.map(inv => {
+            const invSym = getCurrencySymbol(inv.currency || 'USD');
             const gain = inv.current_value - inv.invested_amount;
             const gainPct = inv.invested_amount > 0 ? (gain / inv.invested_amount) * 100 : 0;
             const isPos = gain >= 0;
@@ -143,7 +144,7 @@ export default function InvestmentsScreen({ navigation }) {
                     <Text style={[styles.invType, { color: colors.textSecondary }]}>{type.name} · {formatDate(inv.purchase_date)}</Text>
                   </View>
                   <View style={styles.invRight}>
-                    <Text style={[styles.invValue, { color: colors.text }]}>{formatCurrency(inv.current_value, currencySymbol)}</Text>
+                    <Text style={[styles.invValue, { color: colors.text }]}>{formatCurrency(inv.current_value, invSym)}</Text>
                     <View style={styles.gainRow}>
                       <Ionicons name={isPos ? 'trending-up' : 'trending-down'} size={12} color={isPos ? colors.primary : colors.danger} />
                       <Text style={[styles.gainText, { color: isPos ? colors.primary : colors.danger }]}>
@@ -153,9 +154,9 @@ export default function InvestmentsScreen({ navigation }) {
                   </View>
                 </View>
                 <View style={[styles.invFooter, { borderTopColor: colors.divider }]}>
-                  <Text style={[styles.invFooterText, { color: colors.textSecondary }]}>Invertido: {formatCurrency(inv.invested_amount, currencySymbol)}</Text>
+                  <Text style={[styles.invFooterText, { color: colors.textSecondary }]}>Invertido: {formatCurrency(inv.invested_amount, invSym)}</Text>
                   <Text style={[styles.invFooterText, { color: isPos ? colors.primary : colors.danger }]}>
-                    {isPos ? '+' : ''}{formatCurrency(gain, currencySymbol)}
+                    {isPos ? '+' : ''}{formatCurrency(gain, invSym)}
                   </Text>
                 </View>
               </TouchableOpacity>

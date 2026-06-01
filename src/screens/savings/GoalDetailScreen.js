@@ -13,11 +13,11 @@ import { Button } from '../../components/Button';
 import { AmountInput, Input } from '../../components/Input';
 import { DatePicker } from '../../components/DatePicker';
 import { todayISO } from '../../utils/formatDate';
-import { BorderRadius, FontSize, FontWeight, Shadow, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Shadow, Spacing, getCurrencySymbol } from '../../constants/theme';
 
 export default function GoalDetailScreen({ route, navigation }) {
   const { goalId } = route.params;
-  const { colors, currencySymbol } = useApp();
+  const { colors } = useApp();
   const { getGoalWithProgress, getContributions, addContribution, deleteContribution } = useSavings();
 
   const [goal, setGoal] = useState(null);
@@ -70,6 +70,7 @@ export default function GoalDetailScreen({ route, navigation }) {
 
   if (!goal) return null;
 
+  const sym = getCurrencySymbol(goal.currency || 'USD');
   const days = daysUntil(goal.deadline);
   const monthly = calculateMonthlySavingsNeeded(goal.target_amount, goal.current_amount, goal.deadline);
   const isComplete = goal.current_amount >= goal.target_amount;
@@ -85,8 +86,8 @@ export default function GoalDetailScreen({ route, navigation }) {
         <View style={[styles.hero, { backgroundColor: goal.color }]}>
           <Ionicons name={goal.icon || 'star'} size={56} color="rgba(255,255,255,0.9)" />
           <Text style={styles.heroName}>{goal.name}</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(goal.current_amount, currencySymbol)}</Text>
-          <Text style={styles.heroTarget}>de {formatCurrency(goal.target_amount, currencySymbol)}</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(goal.current_amount, sym)}</Text>
+          <Text style={styles.heroTarget}>de {formatCurrency(goal.target_amount, sym)}</Text>
           <View style={[styles.heroProgress, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
             <View style={[styles.heroFill, { width: `${Math.round(goal.progress * 100)}%`, backgroundColor: '#fff' }]} />
           </View>
@@ -95,8 +96,8 @@ export default function GoalDetailScreen({ route, navigation }) {
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatBox label="Falta" value={formatCurrency(Math.max(0, goal.target_amount - goal.current_amount), currencySymbol)} color={colors.danger} colors={colors} />
-          <StatBox label="Por mes" value={formatCurrency(monthly, currencySymbol)} color={goal.color} colors={colors} />
+          <StatBox label="Falta" value={formatCurrency(Math.max(0, goal.target_amount - goal.current_amount), sym)} color={colors.danger} colors={colors} />
+          <StatBox label="Por mes" value={formatCurrency(monthly, sym)} color={goal.color} colors={colors} />
           {days !== null && <StatBox label="Días" value={String(days)} color={days < 30 ? colors.warning : colors.text} colors={colors} />}
         </View>
 
@@ -135,7 +136,7 @@ export default function GoalDetailScreen({ route, navigation }) {
                 <Text style={[styles.contribNote, { color: colors.text }]}>{c.note || 'Contribución'}</Text>
                 <Text style={[styles.contribDate, { color: colors.textSecondary }]}>{formatDate(c.date)}</Text>
               </View>
-              <Text style={[styles.contribAmount, { color: goal.color }]}>+{formatCurrency(c.amount, currencySymbol)}</Text>
+              <Text style={[styles.contribAmount, { color: goal.color }]}>+{formatCurrency(c.amount, sym)}</Text>
             </TouchableOpacity>
           ))
         )}
@@ -152,7 +153,7 @@ export default function GoalDetailScreen({ route, navigation }) {
       <ConfirmModal
         visible={!!confirmDelete}
         title="Eliminar contribución"
-        message={`Esto reducirá el total ahorrado en ${confirmDelete ? formatCurrency(confirmDelete.amount, currencySymbol) : ''}. ¿Continuar?`}
+        message={`Esto reducirá el total ahorrado en ${confirmDelete ? formatCurrency(confirmDelete.amount, sym) : ''}. ¿Continuar?`}
         onClose={() => setConfirmDelete(null)}
         onConfirm={() => handleDeleteContribution(confirmDelete)}
       />

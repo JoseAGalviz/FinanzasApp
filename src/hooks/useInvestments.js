@@ -20,8 +20,8 @@ export function useInvestments() {
   const addInvestment = useCallback(async (data) => {
     const db = getDb();
     const result = await db.runAsync(
-      'INSERT INTO investments (name, type, invested_amount, current_value, purchase_date, notes) VALUES (?,?,?,?,?,?)',
-      [data.name, data.type, parseFloat(data.invested_amount), parseFloat(data.current_value), data.purchase_date || null, data.notes || null]
+      'INSERT INTO investments (name, type, invested_amount, current_value, purchase_date, notes, currency) VALUES (?,?,?,?,?,?,?)',
+      [data.name, data.type, parseFloat(data.invested_amount), parseFloat(data.current_value), data.purchase_date || null, data.notes || null, data.currency || 'USD']
     );
     return result.lastInsertRowId;
   }, []);
@@ -29,8 +29,8 @@ export function useInvestments() {
   const updateInvestment = useCallback(async (id, data) => {
     const db = getDb();
     await db.runAsync(
-      'UPDATE investments SET name=?, type=?, invested_amount=?, current_value=?, purchase_date=?, notes=? WHERE id=?',
-      [data.name, data.type, parseFloat(data.invested_amount), parseFloat(data.current_value), data.purchase_date || null, data.notes || null, id]
+      'UPDATE investments SET name=?, type=?, invested_amount=?, current_value=?, purchase_date=?, notes=?, currency=? WHERE id=?',
+      [data.name, data.type, parseFloat(data.invested_amount), parseFloat(data.current_value), data.purchase_date || null, data.notes || null, data.currency || 'USD', id]
     );
   }, []);
 

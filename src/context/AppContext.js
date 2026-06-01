@@ -117,6 +117,34 @@ export function AppProvider({ children }) {
     return convertToUSD(amount, currency);
   }
 
+  async function recalculateUSDEquivalents() {
+    const db = getDb();
+    const rows = await db.getAllAsync(
+      "SELECT id, amount, currency, rate_type FROM transactions WHERE currency IS NOT NULL AND currency != 'USD'"
+    );
+    const rateRows = await db.getAllAsync('SELECT * FROM exchange_rates');
+    const rateMap = {};
+    let bcv = null;
+    for (const r of rateRows) {
+      if (r.from_currency === 'VES_BCV') bcv = r.rate;
+      else rateMap[r.from_currency] = r.rate;
+    }
+    await db.withTransactionAsync(async () => {
+      for (const tx of rows) {
+        let usd = null;
+        if (tx.currency === 'VES' && tx.rate_type === 'bcv' && bcv) {
+          usd = tx.amount / bcv;
+        } else if (rateMap[tx.currency]) {
+          usd = tx.amount / rateMap[tx.currency];
+        }
+        if (usd !== null) {
+          await db.runAsync('UPDATE transactions SET usd_equivalent=? WHERE id=?', [usd, tx.id]);
+        }
+      }
+    });
+    return rows.length;
+  }
+
   async function updateExchangeRate(fromCurrency, rate) {
     const db = getDb();
     await db.runAsync(
@@ -150,6 +178,7 @@ export function AppProvider({ children }) {
     convertVESBCVtoUSD,
     convertToUSDWithRateType,
     updateExchangeRate,
+    recalculateUSDEquivalents,
     updateTheme,
     updateCurrency,
     setSelectedMonth,

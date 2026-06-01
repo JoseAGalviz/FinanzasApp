@@ -21,8 +21,8 @@ export function useSavings() {
   const addGoal = useCallback(async (data) => {
     const db = getDb();
     const result = await db.runAsync(
-      'INSERT INTO savings_goals (name, target_amount, current_amount, deadline, icon, color) VALUES (?,?,?,?,?,?)',
-      [data.name, parseFloat(data.target_amount), parseFloat(data.current_amount) || 0, data.deadline || null, data.icon || 'star', data.color || '#10B981']
+      'INSERT INTO savings_goals (name, target_amount, current_amount, deadline, icon, color, currency) VALUES (?,?,?,?,?,?,?)',
+      [data.name, parseFloat(data.target_amount), parseFloat(data.current_amount) || 0, data.deadline || null, data.icon || 'star', data.color || '#10B981', data.currency || 'USD']
     );
     return result.lastInsertRowId;
   }, []);
@@ -30,8 +30,8 @@ export function useSavings() {
   const updateGoal = useCallback(async (id, data) => {
     const db = getDb();
     await db.runAsync(
-      'UPDATE savings_goals SET name=?, target_amount=?, deadline=?, icon=?, color=? WHERE id=?',
-      [data.name, parseFloat(data.target_amount), data.deadline || null, data.icon || 'star', data.color || '#10B981', id]
+      'UPDATE savings_goals SET name=?, target_amount=?, deadline=?, icon=?, color=?, currency=? WHERE id=?',
+      [data.name, parseFloat(data.target_amount), data.deadline || null, data.icon || 'star', data.color || '#10B981', data.currency || 'USD', id]
     );
   }, []);
 

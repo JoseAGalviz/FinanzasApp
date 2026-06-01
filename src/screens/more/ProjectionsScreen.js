@@ -9,7 +9,7 @@ import { calculateCompoundInterest, calculateFIRE, calculateExtraPaymentImpact }
 import { Card } from '../../components/Card';
 import { Input, AmountInput } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, CURRENCY_SYMBOLS, getCurrencySymbol } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 const CHART_W = width - Spacing.lg * 2 - 32;
@@ -21,10 +21,12 @@ const TABS = [
 ];
 
 export default function ProjectionsScreen() {
-  const { colors, currencySymbol } = useApp();
+  const { colors, currencyCode } = useApp();
   const { debts } = useDebts();
   const { getAverageIncome } = useTransactions();
   const [tab, setTab] = useState('compound');
+  const [selectedCurrency, setSelectedCurrency] = useState(currencyCode || 'USD');
+  const currencySymbol = getCurrencySymbol(selectedCurrency);
 
   // Compound
   const [principal, setPrincipal] = useState('1000');
@@ -84,6 +86,24 @@ export default function ProjectionsScreen() {
         {TABS.map(t => (
           <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} style={[styles.tab, tab === t.key && { borderBottomColor: colors.primary }]}>
             <Text style={[styles.tabText, { color: tab === t.key ? colors.primary : colors.textSecondary }]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Currency selector */}
+      <View style={[styles.currencyBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        {CURRENCY_SYMBOLS.map(c => (
+          <TouchableOpacity
+            key={c.code}
+            onPress={() => setSelectedCurrency(c.code)}
+            style={[styles.currencyChip, {
+              backgroundColor: selectedCurrency === c.code ? colors.primary + '20' : colors.surfaceAlt,
+              borderColor: selectedCurrency === c.code ? colors.primary : colors.border,
+            }]}
+          >
+            <Text style={[styles.currencyChipText, { color: selectedCurrency === c.code ? colors.primary : colors.textSecondary }]}>
+              {c.symbol} {c.code}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -245,24 +265,31 @@ export default function ProjectionsScreen() {
 
             {debtImpact && selectedDebt && (
               <Card>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Impacto en "{selectedDebt.name}"</Text>
-                <View style={styles.compareRow}>
-                  <View style={[styles.compareCard, { backgroundColor: colors.dangerLight }]}>
-                    <Text style={[styles.compareLabel, { color: colors.danger }]}>Sin extra</Text>
-                    <Text style={[styles.compareValue, { color: colors.text }]}>{debtImpact.base.months}m</Text>
-                    <Text style={[styles.compareSmall, { color: colors.textSecondary }]}>Intereses: {formatCurrency(debtImpact.base.interest, currencySymbol)}</Text>
-                  </View>
-                  <View style={[styles.compareCard, { backgroundColor: colors.successLight }]}>
-                    <Text style={[styles.compareLabel, { color: colors.primary }]}>Con +{formatCurrency(extraPayment, currencySymbol)}</Text>
-                    <Text style={[styles.compareValue, { color: colors.text }]}>{debtImpact.withExtra.months}m</Text>
-                    <Text style={[styles.compareSmall, { color: colors.textSecondary }]}>Intereses: {formatCurrency(debtImpact.withExtra.interest, currencySymbol)}</Text>
-                  </View>
-                </View>
-                <View style={[styles.fireNote, { backgroundColor: colors.successLight }]}>
-                  <Text style={[styles.fireNoteText, { color: colors.primary }]}>
-                    Ahorras {debtImpact.savedMonths} mes(es) y {formatCurrency(debtImpact.savedInterest, currencySymbol)} en intereses
-                  </Text>
-                </View>
+                {(() => {
+                  const debtSym = getCurrencySymbol(selectedDebt.currency || selectedCurrency);
+                  return (
+                    <>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>Impacto en "{selectedDebt.name}"</Text>
+                      <View style={styles.compareRow}>
+                        <View style={[styles.compareCard, { backgroundColor: colors.dangerLight }]}>
+                          <Text style={[styles.compareLabel, { color: colors.danger }]}>Sin extra</Text>
+                          <Text style={[styles.compareValue, { color: colors.text }]}>{debtImpact.base.months}m</Text>
+                          <Text style={[styles.compareSmall, { color: colors.textSecondary }]}>Intereses: {formatCurrency(debtImpact.base.interest, debtSym)}</Text>
+                        </View>
+                        <View style={[styles.compareCard, { backgroundColor: colors.successLight }]}>
+                          <Text style={[styles.compareLabel, { color: colors.primary }]}>Con +{formatCurrency(extraPayment, debtSym)}</Text>
+                          <Text style={[styles.compareValue, { color: colors.text }]}>{debtImpact.withExtra.months}m</Text>
+                          <Text style={[styles.compareSmall, { color: colors.textSecondary }]}>Intereses: {formatCurrency(debtImpact.withExtra.interest, debtSym)}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.fireNote, { backgroundColor: colors.successLight }]}>
+                        <Text style={[styles.fireNoteText, { color: colors.primary }]}>
+                          Ahorras {debtImpact.savedMonths} mes(es) y {formatCurrency(debtImpact.savedInterest, debtSym)} en intereses
+                        </Text>
+                      </View>
+                    </>
+                  );
+                })()}
               </Card>
             )}
           </>
@@ -304,6 +331,9 @@ const styles = StyleSheet.create({
   tabBar: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', paddingVertical: Spacing.sm, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium },
+  currencyBar: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
+  currencyChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1.5 },
+  currencyChipText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
   scroll: { padding: Spacing.md, paddingBottom: Spacing.xxl },
   cardTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, marginBottom: Spacing.sm },
   cardSub: { fontSize: FontSize.sm, marginBottom: Spacing.md, lineHeight: 20 },

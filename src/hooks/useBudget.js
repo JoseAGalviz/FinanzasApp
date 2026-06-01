@@ -6,33 +6,34 @@ export function useBudget() {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchBudgets = useCallback(async (month, year, currency) => {
+  const fetchBudgets = useCallback(async (month, year) => {
     setLoading(true);
     try {
       const db = getDb();
       const m = String(month).padStart(2, '0');
       const y = String(year);
-      const currFilter = currency ? ' AND currency=?' : '';
-      const currParam = currency ? [currency] : [];
 
       const budgetRows = await db.getAllAsync(
         'SELECT * FROM budgets WHERE month=? AND year=?',
         [month, year]
       );
 
+      // Group spent by category+currency so each budget matches its own currency
       const spentRows = await db.getAllAsync(
-        `SELECT category, SUM(amount) as spent FROM transactions WHERE type='expense' AND strftime('%m',date)=? AND strftime('%Y',date)=?${currFilter} GROUP BY category`,
-        [m, y, ...currParam]
+        `SELECT category, COALESCE(currency,'USD') as currency, SUM(amount) as spent
+         FROM transactions WHERE type='expense' AND strftime('%m',date)=? AND strftime('%Y',date)=?
+         GROUP BY category, currency`,
+        [m, y]
       );
 
       const spentMap = {};
-      for (const r of spentRows) spentMap[r.category] = r.spent;
+      for (const r of spentRows) spentMap[`${r.category}|${r.currency}`] = r.spent;
 
-      const result = budgetRows.map(b => ({
-        ...b,
-        spent: spentMap[b.category_id] || 0,
-        progress: b.limit_amount > 0 ? (spentMap[b.category_id] || 0) / b.limit_amount : 0,
-      }));
+      const result = budgetRows.map(b => {
+        const budgetCurrency = b.currency || 'USD';
+        const spent = spentMap[`${b.category_id}|${budgetCurrency}`] || 0;
+        return { ...b, spent, progress: b.limit_amount > 0 ? spent / b.limit_amount : 0 };
+      });
 
       setBudgets(result);
       return result;
@@ -41,11 +42,11 @@ export function useBudget() {
     }
   }, []);
 
-  const setBudgetLimit = useCallback(async (categoryId, month, year, limitAmount) => {
+  const setBudgetLimit = useCallback(async (categoryId, month, year, limitAmount, currency = 'USD') => {
     const db = getDb();
     await db.runAsync(
-      'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount) VALUES (?,?,?,?)',
-      [categoryId, month, year, parseFloat(limitAmount)]
+      'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount, currency) VALUES (?,?,?,?,?)',
+      [categoryId, month, year, parseFloat(limitAmount), currency]
     );
   }, []);
 
@@ -54,7 +55,7 @@ export function useBudget() {
     await db.runAsync('DELETE FROM budgets WHERE id=?', [id]);
   }, []);
 
-  const applyRule502030 = useCallback(async (monthlyIncome, month, year) => {
+  const applyRule502030 = useCallback(async (monthlyIncome, month, year, currency = 'USD') => {
     const { needs, savings } = calculate502030(monthlyIncome);
     const db = getDb();
 
@@ -77,15 +78,15 @@ export function useBudget() {
     await db.withTransactionAsync(async () => {
       for (const c of needsCategories) {
         await db.runAsync(
-          'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount) VALUES (?,?,?,?)',
-          [c.id, month, year, Math.round(needs * c.pct)]
+          'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount, currency) VALUES (?,?,?,?,?)',
+          [c.id, month, year, Math.round(needs * c.pct), currency]
         );
       }
       const wants = monthlyIncome * 0.3;
       for (const c of wantsCategories) {
         await db.runAsync(
-          'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount) VALUES (?,?,?,?)',
-          [c.id, month, year, Math.round(wants * c.pct)]
+          'INSERT OR REPLACE INTO budgets (category_id, month, year, limit_amount, currency) VALUES (?,?,?,?,?)',
+          [c.id, month, year, Math.round(wants * c.pct), currency]
         );
       }
     });
@@ -95,12 +96,20 @@ export function useBudget() {
     const db = getDb();
     const m = String(month).padStart(2, '0');
     const y = String(year);
-    const currFilter = currency ? ' AND currency=?' : '';
-    const currParam = currency ? [currency] : [];
+    const budgetCurrFilter = currency ? ' AND currency=?' : '';
+    const budgetCurrParam = currency ? [currency] : [];
+    const txCurrFilter = currency ? ' AND currency=?' : '';
+    const txCurrParam = currency ? [currency] : [];
 
     const [totalBudget, totalSpent] = await Promise.all([
-      db.getFirstAsync('SELECT COALESCE(SUM(limit_amount),0) as t FROM budgets WHERE month=? AND year=?', [month, year]),
-      db.getFirstAsync(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE type='expense' AND strftime('%m',date)=? AND strftime('%Y',date)=?${currFilter}`, [m, y, ...currParam]),
+      db.getFirstAsync(
+        `SELECT COALESCE(SUM(limit_amount),0) as t FROM budgets WHERE month=? AND year=?${budgetCurrFilter}`,
+        [month, year, ...budgetCurrParam]
+      ),
+      db.getFirstAsync(
+        `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE type='expense' AND strftime('%m',date)=? AND strftime('%Y',date)=?${txCurrFilter}`,
+        [m, y, ...txCurrParam]
+      ),
     ]);
 
     return {
@@ -110,8 +119,8 @@ export function useBudget() {
     };
   }, []);
 
-  const getOverBudgetCategories = useCallback(async (month, year, currency) => {
-    const list = await fetchBudgets(month, year, currency);
+  const getOverBudgetCategories = useCallback(async (month, year) => {
+    const list = await fetchBudgets(month, year);
     return list.filter(b => b.progress >= 0.8);
   }, [fetchBudgets]);
 

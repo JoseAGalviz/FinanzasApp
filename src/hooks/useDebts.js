@@ -21,8 +21,8 @@ export function useDebts() {
   const addDebt = useCallback(async (data) => {
     const db = getDb();
     const result = await db.runAsync(
-      'INSERT INTO debts (name, total_amount, remaining_amount, interest_rate, minimum_payment, due_date, strategy) VALUES (?,?,?,?,?,?,?)',
-      [data.name, parseFloat(data.total_amount), parseFloat(data.remaining_amount), parseFloat(data.interest_rate) || 0, parseFloat(data.minimum_payment) || 0, data.due_date || null, data.strategy || 'avalanche']
+      'INSERT INTO debts (name, total_amount, remaining_amount, interest_rate, minimum_payment, due_date, strategy, currency) VALUES (?,?,?,?,?,?,?,?)',
+      [data.name, parseFloat(data.total_amount), parseFloat(data.remaining_amount), parseFloat(data.interest_rate) || 0, parseFloat(data.minimum_payment) || 0, data.due_date || null, data.strategy || 'avalanche', data.currency || 'USD']
     );
     return result.lastInsertRowId;
   }, []);
@@ -30,8 +30,8 @@ export function useDebts() {
   const updateDebt = useCallback(async (id, data) => {
     const db = getDb();
     await db.runAsync(
-      'UPDATE debts SET name=?, total_amount=?, remaining_amount=?, interest_rate=?, minimum_payment=?, due_date=?, strategy=? WHERE id=?',
-      [data.name, parseFloat(data.total_amount), parseFloat(data.remaining_amount), parseFloat(data.interest_rate) || 0, parseFloat(data.minimum_payment) || 0, data.due_date || null, data.strategy || 'avalanche', id]
+      'UPDATE debts SET name=?, total_amount=?, remaining_amount=?, interest_rate=?, minimum_payment=?, due_date=?, strategy=?, currency=? WHERE id=?',
+      [data.name, parseFloat(data.total_amount), parseFloat(data.remaining_amount), parseFloat(data.interest_rate) || 0, parseFloat(data.minimum_payment) || 0, data.due_date || null, data.strategy || 'avalanche', data.currency || 'USD', id]
     );
   }, []);
 

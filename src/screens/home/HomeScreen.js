@@ -15,6 +15,7 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useBills } from '../../hooks/useBills';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatMonthYear, prevMonth, nextMonth } from '../../utils/formatDate';
+import { getCurrencySymbol } from '../../constants/theme';
 import { TransactionItem } from '../../components/TransactionItem';
 import { ProgressBar } from '../../components/ProgressBar';
 import { BorderRadius, FontSize, FontWeight, Shadow, Spacing } from '../../constants/theme';
@@ -140,6 +141,8 @@ export default function HomeScreen({ navigation }) {
   const { scheduleAllNotifications } = useNotifications();
 
   const [usdSummary, setUsdSummary] = useState({ income: 0, expense: 0, balance: 0 });
+  const [currencyBalances, setCurrencyBalances] = useState([]);
+  const [netWorthByCurrency, setNetWorthByCurrency] = useState([]);
   const [recentTx, setRecentTx] = useState([]);
   const [goals, setGoals] = useState([]);
   const [budgetSummary, setBudgetSummary] = useState({ budgeted: 0, spent: 0 });
@@ -155,12 +158,27 @@ export default function HomeScreen({ navigation }) {
       const prev = prevMonth(selectedMonth, selectedYear);
 
       // Critical queries — must succeed for core UI
-      const [usdSum, recent] = await Promise.all([
+      const db = getDb();
+      const [usdSum, recent, currBalances, nwRows] = await Promise.all([
         txHook.getMonthSummaryUSD(selectedMonth, selectedYear),
         txHook.fetchTransactions({ month: selectedMonth, year: selectedYear, limit: 5 }),
+        txHook.getBalanceByCurrency(selectedMonth, selectedYear),
+        db.getAllAsync(`
+          SELECT currency, SUM(val) as total FROM (
+            SELECT COALESCE(currency,'USD') as currency, current_amount as val FROM savings_goals
+            UNION ALL
+            SELECT COALESCE(currency,'USD') as currency, current_value as val FROM investments
+            UNION ALL
+            SELECT COALESCE(currency,'USD') as currency, -remaining_amount as val FROM debts
+            UNION ALL
+            SELECT COALESCE(currency,'USD') as currency, current_amount as val FROM emergency_fund
+          ) GROUP BY currency ORDER BY currency
+        `),
       ]);
       setUsdSummary(usdSum);
       setRecentTx(recent);
+      setCurrencyBalances(currBalances.map(b => ({ ...b, balance: b.income - b.expense })));
+      setNetWorthByCurrency(nwRows.filter(r => r.total !== 0));
 
       // Non-critical queries — failures don't block core data
       const [gsRes, bsRes, totalSavedRes, totalDebtRes, avgRes, prevSumRes, upcomingRes, emergencyFundRes, monthlyRes] =
@@ -265,13 +283,83 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Summary Cards */}
+        {/* Summary Cards — USD equivalent */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsScroll} contentContainerStyle={styles.cardsRow}>
-          <SummaryCard title="Balance" value={usdSummary.balance} color={usdSummary.balance >= 0 ? colors.primary : colors.danger} icon="trending-up" currencySymbol="$" colors={colors} />
-          <SummaryCard title="Ingresos" value={usdSummary.income} color={colors.primary} icon="arrow-down-circle" currencySymbol="$" colors={colors} />
-          <SummaryCard title="Gastos" value={usdSummary.expense} color={colors.danger} icon="arrow-up-circle" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Balance USD" value={usdSummary.balance} color={usdSummary.balance >= 0 ? colors.primary : colors.danger} icon="trending-up" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Ingresos USD" value={usdSummary.income} color={colors.primary} icon="arrow-down-circle" currencySymbol="$" colors={colors} />
+          <SummaryCard title="Gastos USD" value={usdSummary.expense} color={colors.danger} icon="arrow-up-circle" currencySymbol="$" colors={colors} />
           <SummaryCard title="Tasa Ahorro" value={savingsRate} isPercent icon="wallet" color={colors.info} currencySymbol="$" colors={colors} />
         </ScrollView>
+
+        {/* Per-currency balances */}
+        {currencyBalances.length > 0 && (
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, padding: Spacing.md, paddingBottom: Spacing.sm }]}>
+              Saldo por Moneda
+            </Text>
+            {currencyBalances.map((cb, i) => {
+              const sym = getCurrencySymbol(cb.currency);
+              const isPositive = cb.balance >= 0;
+              return (
+                <View
+                  key={cb.currency}
+                  style={[
+                    styles.currencyRow,
+                    i < currencyBalances.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={[styles.currencyBadge, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.currencyBadgeText, { color: colors.primary }]}>{sym}</Text>
+                  </View>
+                  <View style={styles.currencyInfo}>
+                    <Text style={[styles.currencyCode, { color: colors.textSecondary }]}>{cb.currency}</Text>
+                    <View style={styles.currencySubRow}>
+                      <Text style={[styles.currencySmall, { color: colors.primary }]}>+{formatCurrency(cb.income, sym)}</Text>
+                      <Text style={[styles.currencySmall, { color: colors.textTertiary }]}> · </Text>
+                      <Text style={[styles.currencySmall, { color: colors.danger }]}>-{formatCurrency(cb.expense, sym)}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.currencyBalance, { color: isPositive ? colors.primary : colors.danger }]}>
+                    {isPositive ? '' : '-'}{formatCurrency(Math.abs(cb.balance), sym)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Net worth per currency */}
+        {netWorthByCurrency.length > 0 && (
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, padding: Spacing.md, paddingBottom: Spacing.sm }]}>
+              Patrimonio Neto por Moneda
+            </Text>
+            {netWorthByCurrency.map((row, i) => {
+              const sym = getCurrencySymbol(row.currency);
+              const isPos = row.total >= 0;
+              return (
+                <View
+                  key={row.currency}
+                  style={[
+                    styles.currencyRow,
+                    i < netWorthByCurrency.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={[styles.currencyBadge, { backgroundColor: isPos ? colors.primaryLight : colors.dangerLight }]}>
+                    <Text style={[styles.currencyBadgeText, { color: isPos ? colors.primary : colors.danger }]}>{sym}</Text>
+                  </View>
+                  <View style={styles.currencyInfo}>
+                    <Text style={[styles.currencyCode, { color: colors.textSecondary }]}>{row.currency}</Text>
+                    <Text style={[styles.currencySmall, { color: colors.textTertiary }]}>Activos − Pasivos</Text>
+                  </View>
+                  <Text style={[styles.currencyBalance, { color: isPos ? colors.primary : colors.danger }]}>
+                    {isPos ? '' : '-'}{formatCurrency(Math.abs(row.total), sym)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Monthly Evolution */}
         {monthlyTotals.length > 0 && (
@@ -584,6 +672,26 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontSize: FontSize.xs },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  currencyBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencyBadgeText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  currencyInfo: { flex: 1 },
+  currencyCode: { fontSize: FontSize.xs, fontWeight: FontWeight.medium },
+  currencySubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  currencySmall: { fontSize: FontSize.xs },
+  currencyBalance: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
   usdCard: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,

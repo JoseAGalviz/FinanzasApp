@@ -10,18 +10,20 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { AmountInput, Input } from '../../components/Input';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, getCurrencySymbol } from '../../constants/theme';
+import { CurrencyPicker } from '../../components/CurrencyPicker';
 
 const MONTH_OPTIONS = [1, 3, 6, 9, 12];
 
 export default function EmergencyFundScreen() {
-  const { colors, currencySymbol } = useApp();
+  const { colors, currencyCode } = useApp();
   const { fund, loading, fetchFund, updateConfig, addContribution, withdraw } = useEmergencyFund();
   const [showConfig, setShowConfig] = useState(false);
   const [showContrib, setShowContrib] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [targetMonths, setTargetMonths] = useState('6');
   const [monthlyExpenses, setMonthlyExpenses] = useState('');
+  const [fundCurrency, setFundCurrency] = useState(currencyCode || 'USD');
   const [contribAmount, setContribAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,6 +33,7 @@ export default function EmergencyFundScreen() {
       if (f) {
         setTargetMonths(String(f.target_months));
         setMonthlyExpenses(String(f.monthly_expenses));
+        setFundCurrency(f.currency || currencyCode || 'USD');
       }
     });
   }, []));
@@ -38,7 +41,7 @@ export default function EmergencyFundScreen() {
   async function handleSaveConfig() {
     setSaving(true);
     try {
-      await updateConfig(parseFloat(targetMonths) || 6, parseFloat(monthlyExpenses) || 0);
+      await updateConfig(parseFloat(targetMonths) || 6, parseFloat(monthlyExpenses) || 0, fundCurrency);
       setShowConfig(false);
       await fetchFund();
     } finally {
@@ -77,6 +80,7 @@ export default function EmergencyFundScreen() {
   const progress = fund?.progress || 0;
   const pct = Math.round(progress * 100);
   const statusColor = pct >= 100 ? colors.primary : pct >= 60 ? colors.warning : colors.danger;
+  const sym = getCurrencySymbol(fund?.currency || fundCurrency);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -85,8 +89,8 @@ export default function EmergencyFundScreen() {
         <View style={[styles.hero, { backgroundColor: pct >= 100 ? colors.primary : colors.warning }]}>
           <Ionicons name="shield-checkmark" size={56} color="rgba(255,255,255,0.9)" />
           <Text style={styles.heroTitle}>Fondo de Emergencia</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(current, currencySymbol)}</Text>
-          <Text style={styles.heroTarget}>Objetivo: {formatCurrency(target, currencySymbol)}</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(current, sym)}</Text>
+          <Text style={styles.heroTarget}>Objetivo: {formatCurrency(target, sym)}</Text>
           <View style={[styles.heroProgress, { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
             <View style={[styles.heroFill, { width: `${Math.min(pct, 100)}%` }]} />
           </View>
@@ -100,17 +104,17 @@ export default function EmergencyFundScreen() {
             <Ionicons name={pct >= 100 ? 'checkmark-circle' : 'alert-circle'} size={22} color={statusColor} />
             <Text style={[styles.statusText, { color: statusColor }]}>
               {pct >= 100 ? '¡Fondo completamente fondeado! Estás protegido.' :
-               pct >= 60 ? `Vas bien. Faltan ${formatCurrency(target - current, currencySymbol)} para completarlo.` :
-               `Necesitas ${formatCurrency(target - current, currencySymbol)} más para alcanzar tu objetivo.`}
+               pct >= 60 ? `Vas bien. Faltan ${formatCurrency(target - current, sym)} para completarlo.` :
+               `Necesitas ${formatCurrency(target - current, sym)} más para alcanzar tu objetivo.`}
             </Text>
           </View>
 
           {fund && (
             <View style={styles.statsGrid}>
-              <StatItem label="Ahorrado" value={formatCurrency(current, currencySymbol)} color={colors.primary} colors={colors} />
-              <StatItem label="Objetivo" value={formatCurrency(target, currencySymbol)} color={colors.text} colors={colors} />
+              <StatItem label="Ahorrado" value={formatCurrency(current, sym)} color={colors.primary} colors={colors} />
+              <StatItem label="Objetivo" value={formatCurrency(target, sym)} color={colors.text} colors={colors} />
               <StatItem label="Meses objetivo" value={`${fund.target_months}m`} color={colors.info} colors={colors} />
-              <StatItem label="Gasto mensual" value={formatCurrency(fund.monthly_expenses, currencySymbol)} color={colors.textSecondary} colors={colors} />
+              <StatItem label="Gasto mensual" value={formatCurrency(fund.monthly_expenses, sym)} color={colors.textSecondary} colors={colors} />
             </View>
           )}
         </Card>
@@ -142,12 +146,13 @@ export default function EmergencyFundScreen() {
 
       {/* Config Modal */}
       <Modal visible={showConfig} onClose={() => setShowConfig(false)} title="Configurar Fondo">
+        <CurrencyPicker label="Moneda del fondo" value={fundCurrency} onChange={setFundCurrency} colors={colors} />
         <AmountInput label="Gasto mensual promedio" value={monthlyExpenses} onChangeText={setMonthlyExpenses} />
         <Input label="Meses objetivo" value={targetMonths} onChangeText={setTargetMonths} keyboardType="numeric" />
         {monthlyExpenses && targetMonths && (
           <View style={[styles.calcPreview, { backgroundColor: colors.primaryLight }]}>
             <Text style={[styles.calcText, { color: colors.primary }]}>
-              Objetivo calculado: {formatCurrency((parseFloat(monthlyExpenses) || 0) * (parseFloat(targetMonths) || 0), currencySymbol)}
+              Objetivo calculado: {formatCurrency((parseFloat(monthlyExpenses) || 0) * (parseFloat(targetMonths) || 0), sym)}
             </Text>
           </View>
         )}

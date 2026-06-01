@@ -24,18 +24,59 @@ function daysAgo(dateStr) {
 }
 
 export default function SettingsScreen() {
-  const { colors, theme, currencySymbol, updateTheme, updateCurrency, exchangeRates, bcvRate, ratesUpdatedAt, updateExchangeRate } = useApp();
+  const { colors, theme, currencySymbol, updateTheme, updateCurrency, exchangeRates, bcvRate, ratesUpdatedAt, updateExchangeRate, recalculateUSDEquivalents } = useApp();
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [vesRate, setVesRate] = useState('');
   const [vesBcvRate, setVesBcvRate] = useState('');
   const [copRate, setCopRate] = useState('');
   const [savingRates, setSavingRates] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [fetchingRates, setFetchingRates] = useState(false);
 
   useEffect(() => {
     setVesRate(String(exchangeRates.VES?.rate ?? 90));
     setCopRate(String(exchangeRates.COP?.rate ?? 4200));
     setVesBcvRate(String(bcvRate?.rate ?? 90));
   }, [exchangeRates, bcvRate]);
+
+  async function handleRecalculate() {
+    setRecalculating(true);
+    try {
+      const count = await recalculateUSDEquivalents();
+      Alert.alert('Listo', `Se recalcularon ${count} transacciones con las tasas actuales.`);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
+  async function handleFetchRates() {
+    setFetchingRates(true);
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD');
+      if (!res.ok) throw new Error('No se pudo obtener las tasas');
+      const json = await res.json();
+      const ves = json.rates?.VES;
+      const cop = json.rates?.COP;
+      if (ves) {
+        setVesBcvRate(String(Math.round(ves)));
+        await updateExchangeRate('VES_BCV', ves);
+      }
+      if (cop) {
+        setCopRate(String(Math.round(cop)));
+        await updateExchangeRate('COP', cop);
+      }
+      Alert.alert(
+        'Tasas actualizadas',
+        `VES BCV: ${ves ? Math.round(ves) : 'no disponible'}\nCOP: ${cop ? Math.round(cop) : 'no disponible'}\n\nLa tasa paralela VES debe ajustarse manualmente.`
+      );
+    } catch (e) {
+      Alert.alert('Error', 'No se pudieron obtener las tasas. Verifica tu conexión a internet.');
+    } finally {
+      setFetchingRates(false);
+    }
+  }
 
   async function handleSaveRates() {
     const ves = parseFloat(vesRate);
@@ -149,13 +190,33 @@ export default function SettingsScreen() {
             </Text>
           </View>
         )}
+        <View style={styles.ratesBtnRow}>
+          <TouchableOpacity
+            onPress={handleSaveRates}
+            disabled={savingRates}
+            style={[styles.saveRatesBtn, { backgroundColor: colors.primary, opacity: savingRates ? 0.6 : 1, flex: 1 }]}
+          >
+            <Ionicons name="checkmark" size={16} color="#fff" />
+            <Text style={styles.saveRatesBtnText}>{savingRates ? 'Guardando...' : 'Guardar tasas'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleFetchRates}
+            disabled={fetchingRates}
+            style={[styles.saveRatesBtn, { backgroundColor: colors.info, opacity: fetchingRates ? 0.6 : 1, flex: 1 }]}
+          >
+            <Ionicons name="cloud-download" size={16} color="#fff" />
+            <Text style={styles.saveRatesBtnText}>{fetchingRates ? 'Obteniendo...' : 'Obtener automático'}</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
-          onPress={handleSaveRates}
-          disabled={savingRates}
-          style={[styles.saveRatesBtn, { backgroundColor: colors.primary, opacity: savingRates ? 0.6 : 1 }]}
+          onPress={handleRecalculate}
+          disabled={recalculating}
+          style={[styles.recalcBtn, { borderColor: colors.info + '60', opacity: recalculating ? 0.6 : 1 }]}
         >
-          <Ionicons name="refresh" size={16} color="#fff" />
-          <Text style={styles.saveRatesBtnText}>{savingRates ? 'Guardando...' : 'Actualizar tasas'}</Text>
+          <Ionicons name="calculator" size={16} color={colors.info} />
+          <Text style={[styles.recalcBtnText, { color: colors.info }]}>
+            {recalculating ? 'Recalculando...' : 'Recalcular equivalencias USD históricas'}
+          </Text>
         </TouchableOpacity>
       </Card>
 
@@ -242,6 +303,9 @@ const styles = StyleSheet.create({
   rateLabel: { fontSize: FontSize.xs, marginBottom: 4 },
   ratePreview: { padding: Spacing.sm, borderRadius: BorderRadius.sm, marginBottom: Spacing.md, alignItems: 'center' },
   ratePreviewText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+  ratesBtnRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
   saveRatesBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, padding: Spacing.md, borderRadius: BorderRadius.md },
-  saveRatesBtnText: { color: '#fff', fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+  saveRatesBtnText: { color: '#fff', fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+  recalcBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1 },
+  recalcBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
 });

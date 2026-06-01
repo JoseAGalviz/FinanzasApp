@@ -12,16 +12,17 @@ import { formatCurrency, formatPercent } from '../../utils/formatCurrency';
 import { formatMonthYear, prevMonth, nextMonth, formatMonthYearShort } from '../../utils/formatDate';
 import { getCategoryById } from '../../constants/categories';
 import { Card } from '../../components/Card';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, CURRENCY_SYMBOLS, getCurrencySymbol } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - Spacing.lg * 2 - 32;
 
 export default function ReportsScreen() {
-  const { colors, currencySymbol, currencyCode, selectedMonth, selectedYear, setSelectedMonth } = useApp();
+  const { colors, currencyCode, selectedMonth, selectedYear, setSelectedMonth } = useApp();
   const txHook = useTransactions();
   const budgetHook = useBudget();
 
+  const [selectedCurrency, setSelectedCurrency] = useState(currencyCode || 'USD');
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [prevSummary, setPrevSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [monthly, setMonthly] = useState([]);
@@ -31,22 +32,24 @@ export default function ReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('overview');
 
+  const currencySymbol = getCurrencySymbol(selectedCurrency);
+
   const loadData = useCallback(async () => {
     const prev = prevMonth(selectedMonth, selectedYear);
     const [sum, prevSum, monthly, breakdown, bud] = await Promise.all([
-      txHook.getMonthSummary(selectedMonth, selectedYear, currencyCode),
-      txHook.getMonthSummary(prev.month, prev.year, currencyCode),
-      txHook.getMonthlyTotals(6, currencyCode),
-      txHook.getCategoryBreakdown(selectedMonth, selectedYear, 'expense', currencyCode),
-      budgetHook.fetchBudgets(selectedMonth, selectedYear, currencyCode),
+      txHook.getMonthSummary(selectedMonth, selectedYear, selectedCurrency),
+      txHook.getMonthSummary(prev.month, prev.year, selectedCurrency),
+      txHook.getMonthlyTotals(6, selectedCurrency),
+      txHook.getCategoryBreakdown(selectedMonth, selectedYear, 'expense', selectedCurrency),
+      budgetHook.fetchBudgets(selectedMonth, selectedYear),
     ]);
     setSummary(sum);
     setPrevSummary(prevSum);
     setMonthly(monthly);
     setBreakdown(breakdown);
-    setBudgets(bud);
+    setBudgets(bud.filter(b => (b.currency || 'USD') === selectedCurrency));
     setInsights(generateInsights(sum, prevSum, breakdown, colors));
-  }, [selectedMonth, selectedYear, colors]);
+  }, [selectedMonth, selectedYear, selectedCurrency, colors]);
 
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
@@ -91,6 +94,24 @@ export default function ReportsScreen() {
         <TouchableOpacity onPress={() => { const n = nextMonth(selectedMonth, selectedYear); setSelectedMonth(n.month, n.year); }}>
           <Ionicons name="chevron-forward" size={20} color={colors.text} />
         </TouchableOpacity>
+      </View>
+
+      {/* Currency selector */}
+      <View style={[styles.currencyBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        {CURRENCY_SYMBOLS.map(c => (
+          <TouchableOpacity
+            key={c.code}
+            onPress={() => setSelectedCurrency(c.code)}
+            style={[styles.currencyChip, {
+              backgroundColor: selectedCurrency === c.code ? colors.primary + '20' : colors.surfaceAlt,
+              borderColor: selectedCurrency === c.code ? colors.primary : colors.border,
+            }]}
+          >
+            <Text style={[styles.currencyChipText, { color: selectedCurrency === c.code ? colors.primary : colors.textSecondary }]}>
+              {c.symbol} {c.code}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Tabs */}
@@ -335,6 +356,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   monthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, gap: Spacing.xl },
   monthText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+  currencyBar: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
+  currencyChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1.5 },
+  currencyChipText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },
   tabs: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: Spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium },

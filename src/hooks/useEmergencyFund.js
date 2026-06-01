@@ -23,18 +23,18 @@ export function useEmergencyFund() {
     }
   }, []);
 
-  const updateConfig = useCallback(async (targetMonths, monthlyExpenses) => {
+  const updateConfig = useCallback(async (targetMonths, monthlyExpenses, currency = 'USD') => {
     const db = getDb();
     const existing = await db.getFirstAsync('SELECT id FROM emergency_fund LIMIT 1');
     if (existing) {
       await db.runAsync(
-        'UPDATE emergency_fund SET target_months=?, monthly_expenses=?, updated_at=datetime("now") WHERE id=?',
-        [parseFloat(targetMonths), parseFloat(monthlyExpenses), existing.id]
+        'UPDATE emergency_fund SET target_months=?, monthly_expenses=?, currency=?, updated_at=datetime("now") WHERE id=?',
+        [parseFloat(targetMonths), parseFloat(monthlyExpenses), currency, existing.id]
       );
     } else {
       await db.runAsync(
-        'INSERT INTO emergency_fund (target_months, monthly_expenses, current_amount) VALUES (?,?,0)',
-        [parseFloat(targetMonths), parseFloat(monthlyExpenses)]
+        'INSERT INTO emergency_fund (target_months, monthly_expenses, current_amount, currency) VALUES (?,?,0,?)',
+        [parseFloat(targetMonths), parseFloat(monthlyExpenses), currency]
       );
     }
   }, []);

@@ -9,11 +9,12 @@ import { Button } from '../../components/Button';
 import { formatCurrency, formatPercent } from '../../utils/formatCurrency';
 import { INVESTMENT_TYPES } from '../../constants/categories';
 import { todayISO } from '../../utils/formatDate';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, getCurrencySymbol } from '../../constants/theme';
+import { CurrencyPicker } from '../../components/CurrencyPicker';
 
 export default function AddInvestmentScreen({ route, navigation }) {
   const existing = route.params?.investment;
-  const { colors, currencySymbol } = useApp();
+  const { colors, currencyCode } = useApp();
   const { addInvestment, updateInvestment, deleteInvestment } = useInvestments();
 
   const [name, setName] = useState(existing?.name || '');
@@ -22,6 +23,7 @@ export default function AddInvestmentScreen({ route, navigation }) {
   const [currentValue, setCurrentValue] = useState(existing ? String(existing.current_value) : '');
   const [purchaseDate, setPurchaseDate] = useState(existing?.purchase_date || todayISO());
   const [notes, setNotes] = useState(existing?.notes || '');
+  const [currency, setCurrency] = useState(existing?.currency || currencyCode || 'USD');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -38,7 +40,7 @@ export default function AddInvestmentScreen({ route, navigation }) {
     if (!validate()) return;
     setLoading(true);
     try {
-      const data = { name: name.trim(), type, invested_amount: parseFloat(investedAmount), current_value: parseFloat(currentValue), purchase_date: purchaseDate, notes };
+      const data = { name: name.trim(), type, invested_amount: parseFloat(investedAmount), current_value: parseFloat(currentValue), purchase_date: purchaseDate, notes, currency };
       if (existing) { await updateInvestment(existing.id, data); }
       else { await addInvestment(data); }
       navigation.goBack();
@@ -62,6 +64,7 @@ export default function AddInvestmentScreen({ route, navigation }) {
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Input label="Nombre del activo" value={name} onChangeText={setName} placeholder="Ej: S&P 500 ETF, Bitcoin..." error={errors.name} />
+      <CurrencyPicker label="Moneda" value={currency} onChange={setCurrency} colors={colors} />
 
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Tipo de inversión</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScroll} contentContainerStyle={styles.typeRow}>
@@ -90,7 +93,7 @@ export default function AddInvestmentScreen({ route, navigation }) {
         <View style={[styles.preview, { backgroundColor: gain >= 0 ? colors.successLight : colors.dangerLight }]}>
           <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>Rendimiento actual:</Text>
           <Text style={[styles.previewValue, { color: gain >= 0 ? colors.primary : colors.danger }]}>
-            {gain >= 0 ? '+' : ''}{formatCurrency(gain, currencySymbol)} ({gain >= 0 ? '+' : ''}{formatPercent(gainPct)})
+            {gain >= 0 ? '+' : ''}{formatCurrency(gain, getCurrencySymbol(currency))} ({gain >= 0 ? '+' : ''}{formatPercent(gainPct)})
           </Text>
         </View>
       )}

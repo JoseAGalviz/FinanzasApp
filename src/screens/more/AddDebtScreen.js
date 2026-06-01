@@ -5,12 +5,13 @@ import { useDebts } from '../../hooks/useDebts';
 import { Input, AmountInput } from '../../components/Input';
 import { DatePicker } from '../../components/DatePicker';
 import { Button } from '../../components/Button';
+import { CurrencyPicker } from '../../components/CurrencyPicker';
 import { todayISO } from '../../utils/formatDate';
 import { Spacing } from '../../constants/theme';
 
 export default function AddDebtScreen({ route, navigation }) {
   const existing = route.params?.debt;
-  const { colors } = useApp();
+  const { colors, currencyCode } = useApp();
   const { addDebt, updateDebt, deleteDebt } = useDebts();
 
   const [name, setName] = useState(existing?.name || '');
@@ -19,6 +20,7 @@ export default function AddDebtScreen({ route, navigation }) {
   const [interestRate, setInterestRate] = useState(existing ? String(existing.interest_rate) : '');
   const [minimumPayment, setMinimumPayment] = useState(existing ? String(existing.minimum_payment) : '');
   const [dueDate, setDueDate] = useState(existing?.due_date || '');
+  const [currency, setCurrency] = useState(existing?.currency || currencyCode || 'USD');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -44,6 +46,7 @@ export default function AddDebtScreen({ route, navigation }) {
         minimum_payment: parseFloat(minimumPayment),
         due_date: dueDate || null,
         strategy: 'avalanche',
+        currency,
       };
       if (existing) { await updateDebt(existing.id, data); }
       else { await addDebt(data); }
@@ -65,6 +68,7 @@ export default function AddDebtScreen({ route, navigation }) {
   return (
     <ScrollView style={[{ flex: 1, backgroundColor: colors.background }]} contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
       <Input label="Nombre de la deuda" value={name} onChangeText={setName} placeholder="Ej: Tarjeta Visa, Préstamo Auto..." error={errors.name} />
+      <CurrencyPicker label="Moneda" value={currency} onChange={setCurrency} colors={colors} />
       <AmountInput label="Monto original total" value={totalAmount} onChangeText={setTotalAmount} />
       {errors.totalAmount && <Text style={{ color: colors.danger, fontSize: 12, marginTop: -12, marginBottom: 12 }}>{errors.totalAmount}</Text>}
       <AmountInput label="Saldo restante" value={remainingAmount} onChangeText={setRemainingAmount} />

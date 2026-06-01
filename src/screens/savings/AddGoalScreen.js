@@ -9,10 +9,11 @@ import { Button } from '../../components/Button';
 import { GOAL_ICONS, GOAL_COLORS } from '../../constants/categories';
 import { todayISO } from '../../utils/formatDate';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { CurrencyPicker } from '../../components/CurrencyPicker';
 
 export default function AddGoalScreen({ route, navigation }) {
   const existing = route.params?.goal;
-  const { colors } = useApp();
+  const { colors, currencyCode } = useApp();
   const { addGoal, updateGoal, deleteGoal } = useSavings();
 
   const [name, setName] = useState(existing?.name || '');
@@ -21,6 +22,7 @@ export default function AddGoalScreen({ route, navigation }) {
   const [deadline, setDeadline] = useState(existing?.deadline || '');
   const [icon, setIcon] = useState(existing?.icon || GOAL_ICONS[0]);
   const [color, setColor] = useState(existing?.color || GOAL_COLORS[0]);
+  const [currency, setCurrency] = useState(existing?.currency || currencyCode || 'USD');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -43,6 +45,7 @@ export default function AddGoalScreen({ route, navigation }) {
         deadline: deadline || null,
         icon,
         color,
+        currency,
       };
       if (existing) {
         await updateGoal(existing.id, data);
@@ -70,6 +73,7 @@ export default function AddGoalScreen({ route, navigation }) {
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Input label="Nombre de la meta" value={name} onChangeText={setName} placeholder="Ej: Vacaciones, Laptop, Fondo..." error={errors.name} />
+      <CurrencyPicker label="Moneda" value={currency} onChange={setCurrency} colors={colors} />
       <AmountInput label="Monto objetivo" value={targetAmount} onChangeText={setTargetAmount} />
       {errors.targetAmount && <Text style={[styles.error, { color: colors.danger }]}>{errors.targetAmount}</Text>}
       {!existing && <AmountInput label="Monto inicial (opcional)" value={initialAmount} onChangeText={setInitialAmount} />}

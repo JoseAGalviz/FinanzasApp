@@ -10,7 +10,7 @@ import { calculateMonthlySavingsNeeded } from '../../utils/calculations';
 import { daysUntil, formatDate } from '../../utils/formatDate';
 import { EmptyState } from '../../components/EmptyState';
 import { ProgressBar } from '../../components/ProgressBar';
-import { BorderRadius, FontSize, FontWeight, Shadow, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Shadow, Spacing, getCurrencySymbol } from '../../constants/theme';
 
 export default function SavingsScreen({ navigation }) {
   const { colors, currencySymbol } = useApp();
@@ -86,7 +86,7 @@ export default function SavingsScreen({ navigation }) {
 
         {/* Goals List */}
         {goals.length > 0 ? (
-          goals.map(goal => <GoalCard key={goal.id} goal={goal} colors={colors} currencySymbol={currencySymbol} onPress={() => navigation.navigate('GoalDetail', { goalId: goal.id })} onEdit={() => navigation.navigate('AddGoal', { goal })} />)
+          goals.map(goal => <GoalCard key={goal.id} goal={goal} colors={colors} onPress={() => navigation.navigate('GoalDetail', { goalId: goal.id })} onEdit={() => navigation.navigate('AddGoal', { goal })} />)
         ) : (
           <EmptyState
             icon="trophy-outline"
@@ -101,7 +101,8 @@ export default function SavingsScreen({ navigation }) {
   );
 }
 
-function GoalCard({ goal, colors, currencySymbol, onPress, onEdit }) {
+function GoalCard({ goal, colors, onPress, onEdit }) {
+  const sym = getCurrencySymbol(goal.currency || 'USD');
   const progress = goal.target_amount > 0 ? goal.current_amount / goal.target_amount : 0;
   const pct = Math.round(Math.min(progress, 1) * 100);
   const days = daysUntil(goal.deadline);
@@ -141,17 +142,17 @@ function GoalCard({ goal, colors, currencySymbol, onPress, onEdit }) {
       <View style={styles.goalCardFooter}>
         <View>
           <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>Ahorrado</Text>
-          <Text style={[styles.footerVal, { color: colors.text }]}>{formatCurrency(goal.current_amount, currencySymbol)}</Text>
+          <Text style={[styles.footerVal, { color: colors.text }]}>{formatCurrency(goal.current_amount, sym)}</Text>
         </View>
         <View style={styles.footerCenter}>
           <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>Falta</Text>
           <Text style={[styles.footerVal, { color: colors.danger }]}>
-            {formatCurrency(Math.max(0, goal.target_amount - goal.current_amount), currencySymbol)}
+            {formatCurrency(Math.max(0, goal.target_amount - goal.current_amount), sym)}
           </Text>
         </View>
         <View style={styles.footerRight}>
           <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>Por mes</Text>
-          <Text style={[styles.footerVal, { color: goal.color }]}>{formatCurrency(monthly, currencySymbol)}</Text>
+          <Text style={[styles.footerVal, { color: goal.color }]}>{formatCurrency(monthly, sym)}</Text>
         </View>
       </View>
     </TouchableOpacity>

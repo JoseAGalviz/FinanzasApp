@@ -250,6 +250,14 @@ async function runMigrations() {
     try { await db.execAsync("ALTER TABLE transactions ADD COLUMN recurring_notify_time TEXT DEFAULT '09:00'"); } catch (_) {}
     await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (5)");
   }
+  if (version < 6) {
+    try { await db.execAsync("ALTER TABLE savings_goals ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE debts ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE investments ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE emergency_fund ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (_) {}
+    try { await db.execAsync("ALTER TABLE budgets ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (_) {}
+    await db.runAsync("INSERT OR IGNORE INTO db_migrations (version) VALUES (6)");
+  }
 }
 
 async function seedDefaults() {

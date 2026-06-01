@@ -14,7 +14,7 @@ import { Button } from '../../components/Button';
 import { AmountInput, Input } from '../../components/Input';
 import { ConfirmModal } from '../../components/Modal';
 import { todayISO } from '../../utils/formatDate';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../../constants/theme';
+import { BorderRadius, FontSize, FontWeight, Spacing, getCurrencySymbol } from '../../constants/theme';
 
 export default function DebtsScreen({ navigation }) {
   const { colors, currencySymbol } = useApp();
@@ -94,6 +94,7 @@ export default function DebtsScreen({ navigation }) {
               <EmptyState icon="card-outline" title="Sin deudas" subtitle="Registra tus deudas para planificar tu estrategia de pago" actionLabel="Agregar deuda" onAction={() => navigation.navigate('AddDebt')} />
             ) : (
               debts.map(debt => {
+                const debtSym = getCurrencySymbol(debt.currency || 'USD');
                 const progress = debt.total_amount > 0 ? 1 - debt.remaining_amount / debt.total_amount : 0;
                 const days = daysUntil(debt.due_date);
                 const isOverdue = days !== null && days < 0;
@@ -107,10 +108,10 @@ export default function DebtsScreen({ navigation }) {
                     <View style={styles.debtHeader}>
                       <View style={styles.debtInfo}>
                         <Text style={[styles.debtName, { color: colors.text }]}>{debt.name}</Text>
-                        <Text style={[styles.debtRate, { color: colors.textSecondary }]}>{debt.interest_rate}% TAE · Min: {formatCurrency(debt.minimum_payment, currencySymbol)}</Text>
+                        <Text style={[styles.debtRate, { color: colors.textSecondary }]}>{debt.interest_rate}% TAE · Min: {formatCurrency(debt.minimum_payment, debtSym)}</Text>
                       </View>
                       <View style={styles.debtRight}>
-                        <Text style={[styles.debtAmount, { color: colors.danger }]}>{formatCurrency(debt.remaining_amount, currencySymbol)}</Text>
+                        <Text style={[styles.debtAmount, { color: colors.danger }]}>{formatCurrency(debt.remaining_amount, debtSym)}</Text>
                         {debt.due_date && (
                           <Text style={[styles.debtDue, { color: isOverdue ? colors.danger : colors.textTertiary }]}>
                             {isOverdue ? 'Vencida' : `Vence en ${days}d`}
@@ -123,7 +124,7 @@ export default function DebtsScreen({ navigation }) {
                       <View style={[styles.debtFill, { width: `${progress * 100}%`, backgroundColor: colors.primary }]} />
                     </View>
                     <Text style={[styles.debtProgress, { color: colors.textSecondary }]}>
-                      {formatPercent(progress * 100)} pagado · {formatCurrency(debt.total_amount, currencySymbol)} total
+                      {formatPercent(progress * 100)} pagado · {formatCurrency(debt.total_amount, debtSym)} total
                     </Text>
 
                     <TouchableOpacity
@@ -160,6 +161,7 @@ export default function DebtsScreen({ navigation }) {
             </Card>
 
             {debts.map(debt => {
+              const debtSym = getCurrencySymbol(debt.currency || 'USD');
               const monthsLeft = debt.interest_rate > 0 && debt.minimum_payment > 0
                 ? Math.ceil(debt.remaining_amount / debt.minimum_payment)
                 : null;
@@ -167,9 +169,9 @@ export default function DebtsScreen({ navigation }) {
                 <Card key={debt.id}>
                   <Text style={[styles.debtCardTitle, { color: colors.text }]}>{debt.name}</Text>
                   <View style={styles.debtStatRow}>
-                    <StatBox label="Saldo" value={formatCurrency(debt.remaining_amount, currencySymbol)} colors={colors} />
+                    <StatBox label="Saldo" value={formatCurrency(debt.remaining_amount, debtSym)} colors={colors} />
                     <StatBox label="Interés" value={`${debt.interest_rate}%`} colors={colors} />
-                    <StatBox label="Mín/mes" value={formatCurrency(debt.minimum_payment, currencySymbol)} colors={colors} />
+                    <StatBox label="Mín/mes" value={formatCurrency(debt.minimum_payment, debtSym)} colors={colors} />
                   </View>
                   {debt.due_date && <Text style={[styles.debtDueText, { color: colors.textSecondary }]}>Próximo pago: {formatDate(debt.due_date)}</Text>}
                 </Card>
