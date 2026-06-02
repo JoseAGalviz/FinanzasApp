@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { FontSize } from '../constants/theme';
 
 import HomeScreen from '../screens/home/HomeScreen';
+import CurrencyHistoryScreen from '../screens/home/CurrencyHistoryScreen';
 import TransactionsScreen from '../screens/transactions/TransactionsScreen';
 import AddTransactionScreen from '../screens/transactions/AddTransactionScreen';
 import ReportsScreen from '../screens/reports/ReportsScreen';
@@ -45,6 +46,14 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={screenOptions(colors)}>
       <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="CurrencyHistory"
+        component={CurrencyHistoryScreen}
+        options={({ route }) => ({ title: `Historial ${route.params.currency}` })}
+      />
+      <Stack.Screen name="AddTransaction" component={AddTransactionScreen} options={({ route }) => ({
+        title: route.params?.transaction ? 'Editar' : 'Nueva Transacción',
+      })} />
     </Stack.Navigator>
   );
 }

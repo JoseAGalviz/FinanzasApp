@@ -301,8 +301,10 @@ export default function HomeScreen({ navigation }) {
               const sym = getCurrencySymbol(cb.currency);
               const isPositive = cb.balance >= 0;
               return (
-                <View
+                <TouchableOpacity
                   key={cb.currency}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('CurrencyHistory', { currency: cb.currency })}
                   style={[
                     styles.currencyRow,
                     i < currencyBalances.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -319,10 +321,13 @@ export default function HomeScreen({ navigation }) {
                       <Text style={[styles.currencySmall, { color: colors.danger }]}>-{formatCurrency(cb.expense, sym)}</Text>
                     </View>
                   </View>
-                  <Text style={[styles.currencyBalance, { color: isPositive ? colors.primary : colors.danger }]}>
-                    {isPositive ? '' : '-'}{formatCurrency(Math.abs(cb.balance), sym)}
-                  </Text>
-                </View>
+                  <View style={styles.currencyRowEnd}>
+                    <Text style={[styles.currencyBalance, { color: isPositive ? colors.primary : colors.danger }]}>
+                      {isPositive ? '' : '-'}{formatCurrency(Math.abs(cb.balance), sym)}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} style={styles.currencyChevron} />
+                  </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -692,6 +697,8 @@ const styles = StyleSheet.create({
   currencySubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   currencySmall: { fontSize: FontSize.xs },
   currencyBalance: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  currencyRowEnd: { flexDirection: 'row', alignItems: 'center' },
+  currencyChevron: { marginLeft: 4 },
   usdCard: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
